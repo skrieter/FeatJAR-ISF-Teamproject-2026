@@ -20,6 +20,9 @@
  */
 package de.featjar.featureide;
 
+import de.featjar.formula.assignment.conversion.ComputeBooleanRepresentation;
+import de.featjar.analysis.ddnnife.computation.ComputeDdnnifeWrapper;
+import de.featjar.analysis.ddnnife.computation.ComputeRandomSolutionsDdnnife;
 import de.featjar.analysis.sat4j.computation.ComputeAtomicSetsSAT4J;
 import de.featjar.analysis.sat4j.computation.ComputeCompleteSample;
 import de.featjar.analysis.sat4j.computation.ComputeCoreSAT4J;
@@ -331,6 +334,39 @@ public class FeatureModelAnalyzer {
                 .set(ComputeSolutionsSAT4J.RANDOM_SEED, randomSeed)
                 .map(ComputeConfigurationFromAssignment::new)
                 .computeResult();
+    }
+
+        public Result<List<Configuration>> randomConfigurations(int numberOfConfigurations, long randomSeed, String solver) {
+                switch (solver) {
+                        case "sat4j":
+                                return fmComputation
+                                .map(ComputeFormula::new)
+                                .map(ComputeNNFFormula::new)
+                                .map(ComputeCNFFormula::new)
+                                .map(ComputeBooleanClauseList::new)
+                                .map(ComputeSolutionsSAT4J::new)
+                                .set(ComputeSolutionsSAT4J.SELECTION_STRATEGY, ISelectionStrategy.NonParameterStrategy.FAST_RANDOM)
+                                .set(ComputeSolutionsSAT4J.FORBID_DUPLICATES, Boolean.FALSE)
+                                .set(ComputeSolutionsSAT4J.LIMIT, numberOfConfigurations)
+                                .set(ComputeSolutionsSAT4J.RANDOM_SEED, randomSeed)
+                                .map(ComputeConfigurationFromAssignment::new)
+                                .computeResult();
+                        case "ddnnife":
+                                return fmComputation
+                                .map(ComputeFormula::new)
+                                .map(ComputeNNFFormula::new)
+                                .map(ComputeCNFFormula::new)
+                                .map(ComputeBooleanRepresentation::new)
+                                .map(ComputeDdnnifeWrapper::new)
+                                .map(ComputeRandomSolutionsDdnnife::new)
+                                .set(ComputeRandomSolutionsDdnnife.SOLUTION_COUNT, numberOfConfigurations)
+                                .set(ComputeRandomSolutionsDdnnife.RANDOM_SEED, randomSeed)
+                                .map(ComputeConfigurationFromAssignment::new)
+                                .computeResult();
+                    default:
+                        throw new IllegalArgumentException("Unknown solver: " + solver);
+                }
+       
     }
 
     /**
