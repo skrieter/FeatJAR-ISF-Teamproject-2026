@@ -9,4 +9,5 @@ plugins {
 includeBuild '../feature-model'
 includeBuild '../uvl'
 includeBuild '../formula-analysis-sat4j'
+includeBuild '../formula-analysis-ddnnife'
 includeBuild '../formula-analysis-sharpsat'
