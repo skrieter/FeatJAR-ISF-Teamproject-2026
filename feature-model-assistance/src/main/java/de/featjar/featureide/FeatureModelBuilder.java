@@ -94,17 +94,34 @@ public class FeatureModelBuilder {
      *
      */
     public void setGroupFeaturesIsInToCardinality(IFeature feature, int  LowerBound, int UpperBound){
-        //get the tree node belonging to this feature if the feature doesn't have a tree node throw an exception
+
+        /**
+         * get the tree node belonging to this feature if the feature doesn't have a tree node throw an exception
+         * */
+
         IFeatureTree featureTree = feature.getFeatureTree().orElseThrow();
-        //get the parent because we aren't changing in the node but the parent is changing the cardinatlity
+
+        /**
+         *  get the parent because we aren't changing in the node but the parent is changing the cardinatlity
+         *  */
         IFeatureTree parentFeatureTree = featureTree.getParent().orElseThrow();
 
-        //it gets  the parent tree and makes it mutable, because the group belongs to the parent
+        /**
+         *  it gets  the parent tree and makes it mutable, because the group belongs to the parent
+         *  */
+
         IMutableFeatureTree mutableParentTree = parentFeatureTree.mutate();
-        //localizing the child within the group under the root
+
+        /**
+         * localizing the child within the group under the root
+         * */
+
         int groupId = featureTree.getParentGroupID();
 
-        //we can update that specific group with our new bounds.
+        /**
+         * we can update that specific group with our new bounds
+         * */
+
         mutableParentTree.toCardinalityGroup(groupId, LowerBound, UpperBound);
     }
     /**
