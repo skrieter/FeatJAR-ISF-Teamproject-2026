@@ -20,6 +20,8 @@
  */
 package de.featjar.featureide;
 
+import de.featjar.base.data.Attribute;
+import de.featjar.base.data.Attributes;
 import de.featjar.base.tree.Trees;
 import de.featjar.feature.model.FeatureModel;
 import de.featjar.feature.model.IConstraint;
@@ -85,6 +87,13 @@ public class FeatureModelBuilder {
                 .mutate()
                 .addFeatureBelow(featureModel.addFeature(name))
                 .getFeature();
+    }
+
+    
+    public <T> Attribute<T> setFeatureAttribute(IFeature feature,String name,Class<T> type,T value) {
+        Attribute<T> attribute = Attributes.get(name, type);
+        feature.mutate().setAttributeValue(attribute, value);
+        return attribute;
     }
 
     /**

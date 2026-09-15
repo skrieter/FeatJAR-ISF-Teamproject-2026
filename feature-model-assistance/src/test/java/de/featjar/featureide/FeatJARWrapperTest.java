@@ -25,6 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import de.featjar.Common;
+import de.featjar.base.data.Attribute;
 import de.featjar.base.data.Void;
 import de.featjar.base.io.text.StringTextFormat;
 import de.featjar.base.tree.DataTree;
@@ -39,6 +40,15 @@ import java.util.Arrays;
 import org.junit.jupiter.api.Test;
 
 public class FeatJARWrapperTest {
+
+    @Test
+    public void featureModelBuilderSetsAttributeOnCorrectFeature() {
+        FeatureModelBuilder builder = new FeatureModelBuilder();
+        IFeature root = builder.addRoot("root");
+        IFeature child = builder.addFeatureBelow("child", root);
+        Attribute<Integer> cost =builder.setFeatureAttribute(child, "builder-cost", Integer.class, 5);
+        assertEquals(5, child.getAttributeValue(cost).get());
+    }
 
     @SuppressWarnings("unused")
     @Test
