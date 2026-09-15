@@ -51,4 +51,26 @@ public class FeatureModelAnalyzerTest {
             assertTrue(configuration.getSelected().contains("Root"));
         }
     }
+
+    @Test
+    public void randomConfigurationsWithDdnnife() {
+        FeatJARWrapper wrapper = new FeatJARWrapper();
+        FeatureModelBuilder builder = wrapper.featureModelBuilder();
+
+        IFeature root = builder.addRoot("Root");
+        IFeature optional = builder.addFeatureBelow("Optional", root);
+        builder.setFeatureToOptional(optional);
+
+        FeatureModelAnalyzer analyzer =
+                wrapper.featureModelAnalyzer(builder.getFeatureModel());
+
+        List<Configuration> configurations =
+                analyzer.randomConfigurations(10, 1L, "ddnnife").orElseThrow();
+
+        assertEquals(10, configurations.size());
+
+        for (Configuration configuration : configurations) {
+            assertTrue(configuration.getSelected().contains("Root"));
+        }
+    }
 }
