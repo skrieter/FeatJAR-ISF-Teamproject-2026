@@ -86,7 +86,26 @@ public class FeatureModelBuilder {
                 .addFeatureBelow(featureModel.addFeature(name))
                 .getFeature();
     }
+    /**
+     * Changes the group the given feature is in to a cardinality group with the given
+     * lower and upper bound (e.g. "pick between {@code lowerBound} and {@code upperBound}
+     * of the children in this group").
+     *
+     */
+    public void setGroupFeatureCardinality(IFeature feature, int  LowerBound, int UpperBound){
+        //get the tree node belonging to this feature if the feature doesn't have a tree node throw an exception
+        IFeatureTree featureTree = feature.getFeatureTree().orElseThrow();
+        //get the parent because we aren't changing in the node but the parent is changing the cardinatlity
+        IFeatureTree parentFeatureTree = featureTree.getParent().orElseThrow();
 
+        //it gets  the parent tree and makes it mutable, because the group belongs to the parent
+        IMutableFeatureTree mutableParentTree = parentFeatureTree.mutate();
+        //localizing the child within the group under the root
+        int groupId = featureTree.getParentGroupID();
+
+        //we can update that specific group with our new bounds.
+        mutableParentTree.toCardinalityGroup(groupId, LowerBound, UpperBound);
+    }
     /**
      * Changes the group the given feature is in to an alternative group.
      *
