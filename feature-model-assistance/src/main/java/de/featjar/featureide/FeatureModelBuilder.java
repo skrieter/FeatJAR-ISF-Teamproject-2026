@@ -28,6 +28,7 @@ import de.featjar.feature.model.IFeatureModel;
 import de.featjar.feature.model.IFeatureModel.IMutableFeatureModel;
 import de.featjar.feature.model.IFeatureTree;
 import de.featjar.feature.model.IFeatureTree.IMutableFeatureTree;
+
 import de.featjar.formula.structure.IFormula;
 import de.featjar.formula.structure.connective.And;
 import de.featjar.formula.structure.connective.Implies;
@@ -92,7 +93,7 @@ public class FeatureModelBuilder {
      * of the children in this group").
      *
      */
-    public void setGroupFeatureCardinality(IFeature feature, int  LowerBound, int UpperBound){
+    public void setGroupFeaturesIsInToCardinality(IFeature feature, int  LowerBound, int UpperBound){
         //get the tree node belonging to this feature if the feature doesn't have a tree node throw an exception
         IFeatureTree featureTree = feature.getFeatureTree().orElseThrow();
         //get the parent because we aren't changing in the node but the parent is changing the cardinatlity
