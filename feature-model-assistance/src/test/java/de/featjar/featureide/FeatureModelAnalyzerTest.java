@@ -21,28 +21,34 @@
 package de.featjar.featureide;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import de.featjar.Common;
-import de.featjar.base.data.Void;
-import de.featjar.base.io.text.StringTextFormat;
-import de.featjar.base.tree.DataTree;
-import de.featjar.feature.model.IConstraint;
+import de.featjar.feature.configuration.Configuration;
 import de.featjar.feature.model.IFeature;
-import de.featjar.feature.model.io.uvl.UVLFeatureModelFormat;
-import de.featjar.formula.structure.connective.And;
-import de.featjar.formula.structure.connective.Implies;
-import de.featjar.formula.structure.connective.Not;
-import java.math.BigInteger;
-import java.util.Arrays;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 public class FeatureModelAnalyzerTest {
 
-    @SuppressWarnings("unused")
     @Test
-    public void testFeatureModelAnalyzer() {
-        
+    public void randomConfigurationsWithSat4j() {
+        FeatJARWrapper wrapper = new FeatJARWrapper();
+        FeatureModelBuilder builder = wrapper.featureModelBuilder();
+
+        IFeature root = builder.addRoot("Root");
+        IFeature optional = builder.addFeatureBelow("Optional", root);
+        builder.setFeatureToOptional(optional);
+
+        FeatureModelAnalyzer analyzer =
+                wrapper.featureModelAnalyzer(builder.getFeatureModel());
+
+        List<Configuration> configurations =
+                analyzer.randomConfigurations(10, 1L, "sat4j").orElseThrow();
+
+        assertEquals(10, configurations.size());
+
+        for (Configuration configuration : configurations) {
+            assertTrue(configuration.getSelected().contains("Root"));
+        }
     }
 }
