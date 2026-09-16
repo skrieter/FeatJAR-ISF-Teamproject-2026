@@ -1,6 +1,6 @@
-# featjar-feature-model-tools README
+# FeatJAR Extension
 
-This is the README for your extension "featjar-feature-model-tools". After writing up a brief description, we recommend including the following sections.
+This is the README for the FeatJAR Extension. After writing up a brief description, we recommend including the following sections.
 
 ## Features
 
