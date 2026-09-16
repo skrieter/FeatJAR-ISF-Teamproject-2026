@@ -6,6 +6,7 @@ plugins {
 dependencies {
     api 'de.featjar:feature-model'
     api 'de.featjar:formula-analysis-sat4j'
+    api 'de.featjar:formula-analysis-ddnnife'
     api 'de.featjar:formula-analysis-sharpsat'
     testImplementation 'de.featjar:uvl'
     testImplementation testFixtures('de.featjar:formula')
