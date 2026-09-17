@@ -84,6 +84,8 @@ public class GuiServer {
                     for (String line = reader.readLine(); line != null; line = reader.readLine()) {
                         if (processServerSignals(line)) {
                             return;
+                        } else {
+                            FeatJAR.log().debug(line);
                         }
                     }
                 } catch (final IOException e) {
