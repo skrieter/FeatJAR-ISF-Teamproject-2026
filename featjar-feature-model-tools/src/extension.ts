@@ -23,8 +23,17 @@ export function activate(context: vscode.ExtensionContext) {
 		// Display a message box to the user
 		vscode.window.showWarningMessage('This is a warning message from VSCode!');
 	});
+	const checkSatisfiability = vscode.commands.registerCommand('featjar-extension.checkSatisfiability', (uri?: vscode.Uri) => {
+		if (!uri) {
+			vscode.window.showErrorMessage('No feature model selected.');
+			return;
+		}
+
+		vscode.window.showInformationMessage(`Selected feature model: ${uri.fsPath}`);
+	});
 	context.subscriptions.push(disposable);
 	context.subscriptions.push(disposable2);	
+	context.subscriptions.push(checkSatisfiability);
 }
 
 // This method is called when your extension is deactivated

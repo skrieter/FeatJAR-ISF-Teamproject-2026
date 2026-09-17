@@ -20,8 +20,20 @@
       {
         "command": "featjar-extension.hellovscode",
         "title": "Hello VSCode"
+      },
+      {
+        "command": "featjar-extension.checkSatisfiability",
+        "title": "FeatJAR: Check Satisfiability"
       }
-    ]
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "featjar-extension.checkSatisfiability",
+          "when": "resourceExtname == .uvl"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
