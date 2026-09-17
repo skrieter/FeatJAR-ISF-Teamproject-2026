@@ -10,7 +10,6 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:featjar-extension.helloWorld",
     "workspaceContains:**/*.uvl"
   ],
   "main": "./out/extension.js",
