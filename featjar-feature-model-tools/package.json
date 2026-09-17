@@ -14,11 +14,11 @@
   "contributes": {
     "commands": [
       {
-        "command": "featjar-feature-model-tools.helloWorld",
+        "command": "featjar-extension.helloWorld",
         "title": "Hello World"
       },
       {
-        "command": "featjar-feature-model-tools.hellovscode",
+        "command": "featjar-extension.hellovscode",
         "title": "Hello VSCode"
       }
     ]
