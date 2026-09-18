@@ -3,7 +3,7 @@
 import * as vscode from 'vscode';
 import { spawn } from 'child_process';
 import * as path from 'path';
-
+import * as os from 'os';
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
@@ -31,12 +31,12 @@ export function activate(context: vscode.ExtensionContext) {
 
 		// AI-assisted: Resolve the FeatJAR directory dynamically
 		// instead of using a hard-coded local path.
-		const allPath = path.join(context.extensionPath, '..', 'all');
+		const featjarpath = path.join(os.homedir(), '.featjar-bin');
 
 		const process = spawn(
 			'java',
 			['-jar', 'build/libs/feat.jar', 'gui', '--input', uri.fsPath],
-			{ cwd: allPath }
+			{ cwd: featjarpath }
 		);
 
 		process.stdout.on('data', (data) => {
