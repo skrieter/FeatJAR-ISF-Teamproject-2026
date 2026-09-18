@@ -209,15 +209,10 @@ public class PreprocessorCommand extends ACommand {
                 .map(formula -> Trees.traverse(formula, serializer).orElseThrow());
     }
 
-    private Stream<String> detectInvalidSyntax(Path in, Charset charset, Preprocessor preprocessor)
-            throws IOException {
-       
-        return preprocessor.checkSyntax(Files.lines(in, charset))
-                .stream()
-                .map(problem -> String.format(
-                    "Line %d: %s",
-                    problem.getLineNumber(),
-                    problem.getMessage()));
+    private Stream<String> detectInvalidSyntax(Path in, Charset charset, Preprocessor preprocessor) throws IOException {
+
+        return preprocessor.checkSyntax(Files.lines(in, charset)).stream()
+                .map(problem -> String.format("Line %d: %s", problem.getLineNumber(), problem.getMessage()));
     }
 
     @Override

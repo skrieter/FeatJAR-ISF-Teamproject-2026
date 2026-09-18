@@ -224,7 +224,8 @@ public class Preprocessor {
             }
 
             if (matcher.group(4) != null) {
-                stack.addLast((IFormula) annotationParser.parse(matcher.group(5)).orElseThrow());
+                stack.addLast(
+                        (IFormula) annotationParser.parse(matcher.group(5)).orElseThrow());
             } else if (matcher.group(3) != null) {
                 if (stack.isEmpty()) {
                     FeatJAR.log().warning("Line %d: no annotation for else", lineNumber);
@@ -278,7 +279,12 @@ public class Preprocessor {
         return problems;
     }
 
-    public List<ParseProblem> checkSyntax(Stream<String> lines){
+    /**
+     * {@return a problem for each annotation with a syntactically invalid condition, including its line number}
+     *
+     * @param lines the line stream
+     */
+    public List<ParseProblem> checkSyntax(Stream<String> lines) {
         List<ParseProblem> problems = new ArrayList<>();
 
         Iterator<String> it = lines.iterator();
@@ -294,10 +300,8 @@ public class Preprocessor {
             Matcher matcher = annotationPattern.matcher(line);
 
             if (!matcher.matches()) {
-                problems.add(new ParseProblem(
-                    "Invalid annotation syntax: " + line,
-                    Problem.Severity.ERROR,
-                    lineNumber));
+                problems.add(
+                        new ParseProblem("Invalid annotation syntax: " + line, Problem.Severity.ERROR, lineNumber));
                 continue;
             }
         }

@@ -24,6 +24,12 @@ class PreprocessorValidateTest {
                 .toList();
     }
 
+    private List<String> checkSyntax(String... lines) {
+        return preprocessor.checkSyntax(Stream.of(lines)).stream()
+                .map(p -> String.format("line %d: %s", p.getLineNumber(), p.getMessage()))
+                .toList();
+    }
+
     @Test
     void emptyInputProducesNoDiagnostics() {
         assertTrue(validate().isEmpty());
@@ -31,77 +37,52 @@ class PreprocessorValidateTest {
 
     @Test
     void plainSourceCodeProducesNoDiagnostics() {
-        assertTrue(validate(
-                "int x = 1;",
-                "System.out.println(x);"
-        ).isEmpty());
+        assertTrue(validate("int x = 1;", "System.out.println(x);").isEmpty());
     }
 
     @Test
     void wellFormedIfElseEndifProducesNoDiagnostics() {
-        assertTrue(validate(
-                "//# if A && B",
-                "int x = 1;",
-                "//# else",
-                "int x = 2;",
-                "//# endif"
-        ).isEmpty());
+        assertTrue(validate("//# if A && B", "int x = 1;", "//# else", "int x = 2;", "//# endif")
+                .isEmpty());
     }
 
     @Test
     void wellFormedIfElifElseEndifProducesNoDiagnostics() {
         assertTrue(validate(
-                "//# if A",
-                "int x = 1;",
-                "//# elif B || C",
-                "int x = 2;",
-                "//# else",
-                "int x = 3;",
-                "//# endif"
-        ).isEmpty());
+                        "//# if A",
+                        "int x = 1;",
+                        "//# elif B || C",
+                        "int x = 2;",
+                        "//# else",
+                        "int x = 3;",
+                        "//# endif")
+                .isEmpty());
     }
 
     @Test
     void elseAndEndifHaveNothingToParse() {
-        assertTrue(validate(
-                "//# if A",
-                "//# else",
-                "//# endif"
-        ).isEmpty());
+        assertTrue(validate("//# if A", "//# else", "//# endif").isEmpty());
     }
 
     @Test
     void unparseableIfConditionIsReported() {
-        List<String> problems = validate(
-                "//# if A oder B",
-                "System.out.println(\"\");",
-                "//# endif"
-        );
+        List<String> problems = validate("//# if A oder B", "System.out.println(\"\");", "//# endif");
 
         assertEquals(1, problems.size());
-        assertTrue(problems.get(0).startsWith("line 1:"),
-                   "expected line 1, got: " + problems.get(0));
+        assertTrue(problems.get(0).startsWith("line 1:"), "expected line 1, got: " + problems.get(0));
     }
 
     @Test
     void unparseableElifConditionIsReported() {
-        List<String> problems = validate(
-                "//# if A",
-                "//# elif B oder C",
-                "//# endif"
-        );
+        List<String> problems = validate("//# if A", "//# elif B oder C", "//# endif");
 
         assertEquals(1, problems.size());
-        assertTrue(problems.get(0).startsWith("line 2:"),
-                   "expected line 2, got: " + problems.get(0));
+        assertTrue(problems.get(0).startsWith("line 2:"), "expected line 2, got: " + problems.get(0));
     }
 
     @Test
     void unbalancedParenthesisIsReported() {
-        List<String> problems = validate(
-                "//# if (A && B",
-                "//# endif"
-        );
+        List<String> problems = validate("//# if (A && B", "//# endif");
 
         assertEquals(1, problems.size());
         assertTrue(problems.get(0).startsWith("line 1:"));
@@ -109,10 +90,7 @@ class PreprocessorValidateTest {
 
     @Test
     void danglingOperatorIsReported() {
-        List<String> problems = validate(
-                "//# if A &&",
-                "//# endif"
-        );
+        List<String> problems = validate("//# if A &&", "//# endif");
 
         assertEquals(1, problems.size());
         assertTrue(problems.get(0).startsWith("line 1:"));
@@ -120,13 +98,7 @@ class PreprocessorValidateTest {
 
     @Test
     void allProblemsInFileAreReported() {
-        List<String> problems = validate(
-                "//# if A oder B",   
-                "int x = 1;",
-                "//# elif C &&", 
-                "int x = 2;",
-                "//# endif"
-        );
+        List<String> problems = validate("//# if A oder B", "int x = 1;", "//# elif C &&", "int x = 2;", "//# endif");
 
         assertEquals(2, problems.size());
         assertTrue(problems.get(0).startsWith("line 1:"));
@@ -135,26 +107,17 @@ class PreprocessorValidateTest {
 
     @Test
     void validateDoesNotStopAtFirstProblem() {
-        List<String> problems = validate(
-                "//# if A oder B",
-                "//# endif",
-                "//# if C oder D",
-                "//# endif"
-        );
+        List<String> problems = validate("//# if A oder B", "//# endif", "//# if C oder D", "//# endif");
 
         assertEquals(2, problems.size());
     }
 
     @Test
     void numericConditionIsReported() {
-        List<String> problems = validate(
-                "//# if 5",
-                "//# endif"
-        );
+        List<String> problems = validate("//# if 5", "//# endif");
 
         assertEquals(1, problems.size());
-        assertTrue(problems.get(0).contains("boolean"),
-                   "expected a 'not boolean' message, got: " + problems.get(0));
+        assertTrue(problems.get(0).contains("boolean"), "expected a 'not boolean' message, got: " + problems.get(0));
     }
 
     @Test
@@ -167,12 +130,7 @@ class PreprocessorValidateTest {
 
     @Test
     void lineNumbersAdvanceThroughTheFile() {
-        List<String> problems = validate(
-                "",
-                "",
-                "",
-                "//# if A oder B"  
-        );
+        List<String> problems = validate("", "", "", "//# if A oder B");
 
         assertEquals(1, problems.size());
         assertTrue(problems.get(0).startsWith("line 4:"));
@@ -180,12 +138,40 @@ class PreprocessorValidateTest {
 
     @Test
     void nonAnnotationLinesAreNeverParsed() {
-        List<String> problems = validate(
-                "// this is a normal comment",
-                "int A = 1;",
-                "if (A) {  }"
-        );
+        List<String> problems = validate("// this is a normal comment", "int A = 1;", "if (A) {  }");
 
         assertTrue(problems.isEmpty());
+    }
+
+    @Test
+    void validAnnotationSyntaxProducesNoProblems() {
+        List<String> problems = checkSyntax("//#if A", "//#elif B", "//#else", "//#endif");
+
+        assertTrue(problems.isEmpty());
+    }
+
+    @Test
+    void missingIfConditionIsReportedBySyntaxCheck() {
+        List<String> problems = checkSyntax("//#if");
+
+        assertEquals(1, problems.size());
+        assertEquals("line 1: Invalid annotation syntax: //#if", problems.get(0));
+    }
+
+    @Test
+    void invalidAnnotationNameIsReportedBySyntaxCheck() {
+        List<String> problems = checkSyntax("code", "//#unknown A");
+
+        assertEquals(1, problems.size());
+        assertEquals("line 2: Invalid annotation syntax: //#unknown A", problems.get(0));
+    }
+
+    @Test
+    void syntaxCheckReportsMultipleProblems() {
+        List<String> problems = checkSyntax("//#if A", "//#else extra", "normal code", "//#elif");
+
+        assertEquals(2, problems.size());
+        assertEquals("line 2: Invalid annotation syntax: //#else extra", problems.get(0));
+        assertEquals("line 4: Invalid annotation syntax: //#elif", problems.get(1));
     }
 }
