@@ -23,14 +23,14 @@
       },
       {
         "command": "featjar-extension.checkSatisfiability",
-        "title": "FeatJAR: Check Satisfiability"
+        "title": "Check Satisfiability"
       }
     ],
     "menus": {
       "explorer/context": [
         {
           "command": "featjar-extension.checkSatisfiability",
-          "when": "resourceExtname == .uvl"
+          "when": "resourceExtname == .uvl || resourceExtname == .xml || resourceExtname == .dimacs"
         }
       ]
     }
