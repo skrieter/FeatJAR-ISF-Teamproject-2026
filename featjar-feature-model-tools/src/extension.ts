@@ -1,6 +1,8 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
+import { spawn } from 'child_process';
+import * as path from 'path';
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -23,8 +25,39 @@ export function activate(context: vscode.ExtensionContext) {
 		// Display a message box to the user
 		vscode.window.showWarningMessage('This is a warning message from VSCode!');
 	});
+	const disposable3 = vscode.commands.registerCommand(
+	'featjar-extension.openGui',
+	(uri: vscode.Uri) => {
+
+		// AI-assisted: Resolve the FeatJAR directory dynamically
+		// instead of using a hard-coded local path.
+		const allPath = path.join(context.extensionPath, '..', 'all');
+
+		const process = spawn(
+			'java',
+			['-jar', 'build/libs/feat.jar', 'gui', '--input', uri.fsPath],
+			{ cwd: allPath }
+		);
+
+		process.stdout.on('data', (data) => {
+			const output = data.toString();
+
+			if (output.includes('URL:')) {
+				const parts = output.split('URL:');
+				const url = parts[1].trim();
+
+				vscode.commands.executeCommand(
+					'simpleBrowser.show',
+					url
+				);
+			}
+		});
+	}
+	);
+
 	context.subscriptions.push(disposable);
-	context.subscriptions.push(disposable2);	
+	context.subscriptions.push(disposable2);
+	context.subscriptions.push(disposable3);	
 }
 
 // This method is called when your extension is deactivated
