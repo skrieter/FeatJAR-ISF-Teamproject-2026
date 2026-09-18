@@ -31,14 +31,8 @@ export function activate(context: vscode.ExtensionContext) {
 
 		// AI-assisted: Resolve the FeatJAR directory dynamically
 		// instead of using a hard-coded local path.
-		const featjarpath = path.join(os.homedir(), '.featjar-bin');
-
-		const process = spawn(
-			'java',
-			['-jar', 'build/libs/feat.jar', 'gui', '--input', uri.fsPath],
-			{ cwd: featjarpath }
-		);
-
+	const featjarPath = path.join(os.homedir(),'.featjar-bin','feat.jar');
+	const process = spawn('java',['-jar', featjarPath, 'gui', '--input', uri.fsPath]);
 		process.stdout.on('data', (data) => {
 			const output = data.toString();
 
