@@ -51,7 +51,8 @@ public class PreprocessorCommand extends ACommand {
         PROCESS,
         PRINT_VARIABLES,
         PRINT_ANNOTATIONS,
-        PRINT_PRESENCE_CONDITIONS
+        PRINT_PRESENCE_CONDITIONS,
+        CHECK_SYNTAX
     }
 
     public static enum MissingVariables {
@@ -108,6 +109,9 @@ public class PreprocessorCommand extends ACommand {
                     break;
                 case PRINT_PRESENCE_CONDITIONS:
                     stream = printPresenceConditions(in, charset, preprocessor);
+                    break;
+                case CHECK_SYNTAX:
+                    stream = detectInvalidSyntax(in, charset, preprocessor);
                     break;
                 default:
                     return 1;
@@ -203,6 +207,17 @@ public class PreprocessorCommand extends ACommand {
         serializer.setSymbols(JavaSymbols.INSTANCE);
         return preprocessor.computePresenceConditions(Files.lines(in, charset)).stream()
                 .map(formula -> Trees.traverse(formula, serializer).orElseThrow());
+    }
+
+    private Stream<String> detectInvalidSyntax(Path in, Charset charset, Preprocessor preprocessor)
+            throws IOException {
+       
+        return preprocessor.checkSyntax(Files.lines(in, charset))
+                .stream()
+                .map(problem -> String.format(
+                    "Line %d: %s",
+                    problem.getLineNumber(),
+                    problem.getMessage()));
     }
 
     @Override

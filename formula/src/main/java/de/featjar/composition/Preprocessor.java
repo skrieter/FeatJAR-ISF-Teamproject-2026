@@ -50,6 +50,7 @@ public class Preprocessor {
 
     private final Pattern annotationPattern;
     private final Pattern startAnnotationPattern;
+    private final String annotationPrefix;
 
     private class Filter implements Predicate<String> {
 
@@ -175,6 +176,7 @@ public class Preprocessor {
     }
 
     public Preprocessor(String annotationPrefix, Symbols symbols) {
+        this.annotationPrefix = annotationPrefix;
         annotationParser = new ExpressionParser();
         annotationParser.setSymbols(symbols);
         String prefix = Pattern.quote(annotationPrefix);
@@ -273,6 +275,32 @@ public class Preprocessor {
             }
         }
 
+        return problems;
+    }
+
+    public List<ParseProblem> checkSyntax(Stream<String> lines){
+        List<ParseProblem> problems = new ArrayList<>();
+
+        Iterator<String> it = lines.iterator();
+        int lineNumber = 0;
+
+        while (it.hasNext()) {
+            String line = it.next();
+            lineNumber++;
+
+            if (!line.startsWith(annotationPrefix)) {
+                continue;
+            }
+            Matcher matcher = annotationPattern.matcher(line);
+
+            if (!matcher.matches()) {
+                problems.add(new ParseProblem(
+                    "Invalid annotation syntax: " + line,
+                    Problem.Severity.ERROR,
+                    lineNumber));
+                continue;
+            }
+        }
         return problems;
     }
 
