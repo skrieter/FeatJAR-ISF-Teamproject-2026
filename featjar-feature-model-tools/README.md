@@ -1,72 +1,33 @@
-# FeatJAR Extension
+# FeatJAR Feature Model Tools
 
-This is the README for the FeatJAR Extension. After writing up a brief description, we recommend including the following sections.
+## Description
 
-## Features
-
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
-
-For example if there is an image subfolder under your extension project workspace:
-
-\!\[feature X\]\(images/feature-x.png\)
-
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+The FeatJAR Feature Model Tools extension provides tools for creating, editing, and analyzing FeatJAR feature models in Visual Studio Code.
 
 ## Requirements
 
-- npm must be installed and available on your command line.
-- run npm install from the featjar-feature-model-tools folder
+- Node.js and npm
 
-## Extension Settings
+## Run the extension
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
+1. Open a terminal in this folder:
 
-For example:
+   ```text
+   cd featjar-feature-model-tools
+   ```
 
-This extension contributes the following settings:
+2. Install the dependencies:
 
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+   ```text
+   npm install
+   ```
 
-## Known Issues
+3. Compile the extension:
 
-Calling out known issues can help limit users opening duplicate issues against your extension.
+   ```text
+   npm run compile
+   ```
 
-## Release Notes
+4. Open the project in Visual Studio Code and press `F5`.
 
-Users appreciate release notes as you update your extension.
-
-### 1.0.0
-
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
-
----
-
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+5. In the new Extension Development Host window, open the Command Palette with `Ctrl+Shift+P` and run one of the available FeatJAR commands.
