@@ -252,30 +252,4 @@ public class Preprocessor {
         return lines.filter(annotationPattern.asMatchPredicate()).collect(Collectors.toList());
     }
 
-    /**
-     * {@return one message per block of code lines whose presence condition is not satisfiable}
-     *
-     * @param lines the line stream
-     * @param isSatisfiable tests a presence condition, e.g., together with a feature model
-     */
-    public List<String> findDeadCode(Stream<String> lines, Predicate<IFormula> isSatisfiable) {
-        List<IFormula> presence = computePresenceConditions(lines);
-        ExpressionSerializer serializer = new ExpressionSerializer();
-        serializer.setSymbols(annotationParser.getSymbols());
-        List<String> dead = new ArrayList<>();
-        // a code block is a maximal run of lines between annotations, which have the presence condition False
-        for (int start = 0, i = 0; i <= presence.size(); i++) {
-            if (i == presence.size() || presence.get(i) == False.INSTANCE) {
-                if (start < i && !isSatisfiable.test(presence.get(start))) {
-                    dead.add(String.format(
-                            "Dead code at lines %d-%d: %s",
-                            start + 1,
-                            i,
-                            Trees.traverse(presence.get(start), serializer).orElseThrow()));
-                }
-                start = i + 1;
-            }
-        }
-        return dead;
-    }
 }
