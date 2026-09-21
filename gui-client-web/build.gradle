@@ -52,23 +52,15 @@ tasks.named('spotlessApply') {
     dependsOn 'yarnFormat'
 }
 
-tasks.register('yarnCleanBuild', com.github.gradle.node.yarn.task.YarnTask) {
-    workingDir = project.projectDir
-    args = ['clean:build']
-}
-
-tasks.named('clean') {
-    dependsOn 'yarnClean'
-}
-
-tasks.register('yarnClean', com.github.gradle.node.yarn.task.YarnTask) {
-    workingDir = project.projectDir
-    args = ['clean']
-}
-
-tasks.register('yarnReset', com.github.gradle.node.yarn.task.YarnTask) {
-    workingDir = project.projectDir
-    args = ['reset']
+clean.doFirst {
+    delete "${rootDir}/lib/"
+    delete "${rootDir}/node_modules/"
+    delete "${rootDir}/yarn.lock"
+    delete "${rootDir}/*.tsbuildinfo"
+    delete "${rootDir}/app/bundle.js"
+    delete "${rootDir}/app/bundle.js.map"
+    
+    delete "${rootDir}/app/css/"
 }
 
 license {
