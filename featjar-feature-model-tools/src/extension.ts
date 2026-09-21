@@ -2,6 +2,7 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 import { spawn } from 'child_process';
+import * as fs from 'node:fs';
 import * as path from 'path';
 import * as os from 'os';
 import { join } from 'node:path';
@@ -23,6 +24,40 @@ function runFeatJar(jarPath: string, args: string[]): Promise<string> {
     });
 }
 
+const FEATJAR_DOWNLOAD_URL = 'https://github.com/skrieter/FeatJAR-ISF-Teamproject-2026/releases/download/feat.jar/feat.jar';
+
+export async function featJarDownload(): Promise<void> {
+
+	const featJarDirectory = path.join(os.homedir(), '.featjar-bin');
+	const featJarPath = path.join(featJarDirectory, 'feat.jar');
+	if (!fs.existsSync(featJarPath)) {
+		const choice = await vscode.window.showInformationMessage('FeatJAR is not installed. Would you like to download it?', 'Download', 'Cancel');
+		if (choice === 'Download') {
+			try {
+				await fs.promises.mkdir(featJarDirectory, {recursive: true});
+
+				const response = await fetch(FEATJAR_DOWNLOAD_URL);
+
+				if (!response.ok) {
+					throw new Error(`Download failed with status ${response.status}`);
+				}
+
+				const data = Buffer.from(await response.arrayBuffer());
+				const temporaryPath = `${featJarPath}.download`;
+
+				await fs.promises.writeFile(temporaryPath, data);
+				await fs.promises.rename(temporaryPath, featJarPath);
+
+				vscode.window.showInformationMessage('FeatJAR was installed successfully.');
+			} catch (error) {
+				vscode.window.showErrorMessage(
+					`Could not download FeatJAR: ${error}`
+				);
+			}
+		}
+	}
+}
+
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 function openGui(uri: vscode.Uri) {
@@ -42,8 +77,10 @@ function openGui(uri: vscode.Uri) {
 	}
 	});
 }
-export function activate(context: vscode.ExtensionContext) {
 
+export async function activate(context: vscode.ExtensionContext) {
+
+	await featJarDownload();
 	// Use the console to output diagnostic information (console.log) and errors (console.error)
 	// This line of code will only be executed once when your extension is activated
 	console.log('Congratulations, your extension "FeatJar Extension" is now active!');
