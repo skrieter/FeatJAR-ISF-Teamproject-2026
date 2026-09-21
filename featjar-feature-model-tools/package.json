@@ -20,6 +20,21 @@
       {
         "command": "featjar-extension.hellovscode",
         "title": "Hello VSCode"
+      },
+      {
+        "command": "featjar-extension.checkSatisfiability",
+        "title": "Check Satisfiability"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "featjar-extension.checkSatisfiability",
+          "when": "resourceExtname == .uvl || resourceExtname == .xml || resourceExtname == .dimacs"
+        }
+      ]
+    }
+  },
       },{
         "command": "featjar-extension.openGui",
         "title": "FeatJAR: Open GUI"
