@@ -1,4 +1,4 @@
-import { IActionDispatcher, Action } from '@eclipse-glsp/client';
+import { IActionDispatcher, Action, DeleteElementOperation, CreateNodeOperation } from '@eclipse-glsp/client';
 import {
     SetFeatureImplementationTypeAction,
     SetNodeTypeAction,
@@ -18,16 +18,30 @@ interface Entry {
  *
  * @param actionDispatcher sends the chosen action to the server
  */
+/**
+ * Right-click menu for the diagram. Originally just handled features/groups,
+ *we added the constraint stuff for #27 (add + delete constraints from the context menu).
+ */
 export function initializeNodeContextMenu(actionDispatcher: IActionDispatcher): void {
     console.log('context menu installed');
     document.addEventListener('contextmenu', (event: MouseEvent) => {
         console.log('contextmenu fired on', event.target);
         const nodeElement = (event.target as Element).closest('[data-svg-metadata-type="node"]');
+        event.preventDefault();
+// if we didn't click on a node, we're on empty canvas:that's where "Add Constraint" should show up
         if (!nodeElement) {
+            const addEntries: Entry[] = [
+                {
+                    label: 'Add Constraint',
+                    action: CreateNodeOperation.create('constraint-node', {
+                        location: { x: event.clientX, y: event.clientY }
+                    })
+                }
+            ];
+            showMenu(event.clientX, event.clientY, addEntries, actionDispatcher);
+
             return;
         }
-        console.log('node found:', nodeElement);
-        event.preventDefault();
 
         const gModelId = nodeElement.id.replace('sprotty_', '');
         const css = nodeElement.getAttribute('class') ?? '';
@@ -69,6 +83,12 @@ function buildEntries(id: string, css: string, actionDispatcher: IActionDispatch
             // New: brings in the "add feature below" logic implemented in create-feature-actions.ts.
             { label: 'New Feature', action: () => addFeatureBelow(id, actionDispatcher) }
         ];
+
+        return entries;
+    }
+     // added for #27 - right click on an existing constraint now gives a Delete option.
+    if (css.includes('constraint-node')){
+        entries = [{ label: 'Delete', action: DeleteElementOperation.create([id]) }];
     }
 
     return entries;
