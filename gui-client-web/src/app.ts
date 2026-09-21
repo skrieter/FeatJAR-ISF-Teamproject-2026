@@ -1,3 +1,4 @@
+
 /********************************************************************************
  * Copyright (c) 2019-2024 EclipseSource and others.
  *
@@ -54,7 +55,7 @@ const MODEL_FILE = 'gui_model' + '.' + ENDPOINT_ID;
 const OPTIONAL_FEATURE_ID = 'feature-optional';
 const MANDATORY_FEATURE_ID = 'feature-mandatory';
 const MULTIPLE_FEATURE_ID = 'feature-multiple';
-const loc = window.location.pathname;
+const loc = decodeURIComponent(window.location.pathname);//added by wihed
 const CLIENT_PATH = loc.substring(0, loc.lastIndexOf('/'));
 const CLIENT_ABSOLUTE_EMF_FILE_PATH = resolve(join(CLIENT_PATH, '..', 'app', MODEL_FILE));
 const CLIENT_ID = 'sprotty';
