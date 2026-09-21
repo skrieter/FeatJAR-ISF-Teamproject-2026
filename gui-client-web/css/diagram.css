@@ -128,3 +128,11 @@
 .session-management-panel-button:hover {
     background: #e8e8e8;
 }
+.session-management-panel-button.disabled {
+    opacity: 0.4;
+      pointer-events: none;
+ }
+
+.feature-color-toolbar-button:hover {
+    background: #e8e8e8;
+}
