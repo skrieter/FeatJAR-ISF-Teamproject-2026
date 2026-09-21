@@ -34,7 +34,8 @@ import {
     GLabel,
     GLabelView,
     editLabelFeature,
-    contextMenuModule
+    contextMenuModule,
+    NodeCreationTool    // this is added  
 } from '@eclipse-glsp/client';
 import { Container } from 'inversify';
 import { makeLoggerMiddleware } from 'inversify-logger-middleware';
@@ -43,6 +44,7 @@ import { FeatureCardinalityEdgeView } from './feature-edge-view';
 import { getParameters } from './url-parameters';
 import { SessionManagementPanel } from './session-management-panel';
 import { FeatureSearchProvider } from './feature-search-provider';
+import { ImmediateNodeCreationTool } from './immediate-node-creation-tool';
 
 import '../css/diagram.css';
 import '../css/command-palette.css';
@@ -109,6 +111,9 @@ export default function createContainer(options: IDiagramOptions): Container {
     bindOrRebind(container, TYPES.ILogger).to(ConsoleLogger).inSingletonScope();
     bindOrRebind(container, TYPES.LogLevel).toConstantValue(LogLevel.warn);
     container.bind(TYPES.IMarqueeBehavior).toConstantValue({ entireEdge: true, entireElement: true });
+    // Palette buttons (Add Feature, Add Node, Add Constraint, ...) create the element right away
+    // instead of waiting for a placement click that the server ignores anyway (issue #23).
+    bindOrRebind(container, NodeCreationTool).to(ImmediateNodeCreationTool).inSingletonScope();
 
     if (parameters.inversifyLog) {
         configureInversifyLogger(container);
