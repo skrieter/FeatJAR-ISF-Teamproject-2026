@@ -26,7 +26,11 @@ import featJAR.Identifiable;
 import java.util.Optional;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.glsp.server.emf.notation.EMFNotationModelState;
-
+import featJAR.Feature;
+import featJAR.FeatureModel;
+import featJAR.GroupNode;
+import java.util.HashSet;
+import java.util.Set;
 /**
  * Resolves GModel IDs to their semantic elements.
  * This is possible because the {@link FeatureModelIdGenerator} uses
@@ -53,5 +57,38 @@ public class IdentifiableResolver {
         }
         EObject found = modelState.getSemanticModel().eResource().getEObject(id);
         return found instanceof Identifiable identifiable ? Optional.of(identifiable) : Optional.empty();
+    }
+        /**
+     * Collects the names of all features from the semantic model.
+     *
+     *to check the references of a constraint:
+     * {@link FeatureModelLabelEditValidator#findConstraintProblem(String, Set)}.
+     * @return the names of all features, possibly empty
+     */
+    public Set<String> findFeatureNames() {
+        Set<String> names = new HashSet<>();
+
+        // If no model is loaded yet, we return the empty set
+        Optional<FeatureModel> model = modelState.getSemanticModel(FeatureModel.class);
+        if (model.isPresent()) {
+
+            // the  model can have several root features so we go through all of them
+            for (Feature root : model.get().getRoots()) {
+                collectFeatureNames(root, names);
+            }
+        }
+        return names;
+    }
+
+    /* Walks down the tree: feature -> its group nodes -> the features of each group node */
+    private void collectFeatureNames(final Feature feature, final Set<String> names) {
+        if (feature.getName() != null) {
+            names.add(feature.getName());
+        }
+        for (GroupNode group : feature.getGroupNodeList()) {
+            for (Feature child : group.getFeatureList()) {
+                collectFeatureNames(child, names);
+            }
+        }
     }
 }
