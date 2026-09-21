@@ -9,9 +9,7 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [
-    "workspaceContains:**/*.uvl"
-  ],
+  "activationEvents": ["workspaceContains:**/*.uvl"],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
@@ -22,9 +20,31 @@
       {
         "command": "featjar-extension.hellovscode",
         "title": "Hello VSCode"
+      },{
+        "command": "featjar-extension.openGui",
+        "title": "FeatJAR: Open GUI"
       }
-    ]
-  },
+    ],
+  "menus": {
+  "explorer/context": [
+    {
+      "command": "featjar-extension.openGui",
+      "when": "resourceExtname == .uvl"
+    }
+  ]
+},"customEditors": [
+    {
+      "viewType": "featjar-extension.uvlEditor",
+      "displayName": "FeatJAR GUI",
+      "selector": [
+        {
+          "filenamePattern": "*.uvl"
+        }
+      ],
+      "priority": "default"
+    }
+  ]
+},
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
