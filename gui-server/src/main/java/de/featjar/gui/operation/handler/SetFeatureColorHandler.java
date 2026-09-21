@@ -10,6 +10,16 @@ import java.util.Optional;
 import org.eclipse.emf.common.command.Command;
 import org.eclipse.glsp.server.operations.GModelOperationHandler;
 
+/**
+ * this Class is AI generated
+ * Handles the "Set Color..." action from the diagram.
+ *
+ * Looks up the feature the user clicked, and if a color was actually
+ * given, sets it as a "color" attribute on that feature in memory.
+ * The diagram picks this up automatically afterwards and repaints
+ * the node.
+ */
+
 public class SetFeatureColorHandler extends GModelOperationHandler<SetFeatureColorOperation> {
 
     @Inject

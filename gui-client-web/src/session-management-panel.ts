@@ -88,7 +88,6 @@ export class SessionManagementPanel extends AbstractUIExtension implements IDiag
      * (not a group node or constraint) is selected.
      */
     selectionChanged(root: Readonly<GModelRoot>, selectedElements: string[]): void {
-         console.log('selectionChanged fired!!!!!:', selectedElements);
         if (selectedElements.length !== 1) {
             this.selectedFeatureId = undefined;
             this.setColorButtonEnabled(false);
