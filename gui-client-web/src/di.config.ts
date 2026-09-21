@@ -35,7 +35,7 @@ import {
     GLabelView,
     editLabelFeature,
     contextMenuModule,
-    NodeCreationTool    // this is added  
+    NodeCreationTool 
 } from '@eclipse-glsp/client';
 import { Container } from 'inversify';
 import { makeLoggerMiddleware } from 'inversify-logger-middleware';
