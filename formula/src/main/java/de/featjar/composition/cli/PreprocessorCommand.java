@@ -48,7 +48,8 @@ public class PreprocessorCommand extends ACommand {
     public static enum Mode {
         PROCESS,
         PRINT_VARIABLES,
-        PRINT_ANNOTATIONS
+        PRINT_ANNOTATIONS,
+        PRINT_SUPERFLUOUS_ANNOTATIONS
     }
 
     public static enum MissingVariables {
@@ -102,6 +103,9 @@ public class PreprocessorCommand extends ACommand {
                     break;
                 case PRINT_ANNOTATIONS:
                     stream = printAnnotations(in, charset, preprocessor);
+                    break;
+                case PRINT_SUPERFLUOUS_ANNOTATIONS:
+                    stream = printSuperfluousAnnotations(in, charset, preprocessor);
                     break;
                 default:
                     return 1;
@@ -189,6 +193,11 @@ public class PreprocessorCommand extends ACommand {
 
     private Stream<String> printAnnotations(Path in, Charset charset, Preprocessor preprocessor) throws IOException {
         return preprocessor.extractAnnotations(Files.lines(in, charset)).stream();
+    }
+
+    private Stream<String> printSuperfluousAnnotations(Path in, Charset charset, Preprocessor preprocessor)
+            throws IOException {
+        return preprocessor.findSuperfluousAnnotations(Files.lines(in, charset)).stream();
     }
 
     @Override
