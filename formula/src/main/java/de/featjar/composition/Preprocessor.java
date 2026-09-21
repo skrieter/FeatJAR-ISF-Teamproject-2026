@@ -22,9 +22,7 @@ package de.featjar.composition;
 
 import de.featjar.base.FeatJAR;
 import de.featjar.base.data.Result;
-import de.featjar.base.tree.Trees;
 import de.featjar.formula.assignment.Assignment;
-import de.featjar.formula.io.textual.ExpressionSerializer;
 import de.featjar.formula.io.textual.Symbols;
 import de.featjar.formula.structure.IExpression;
 import de.featjar.formula.structure.IFormula;
@@ -251,5 +249,4 @@ public class Preprocessor {
     public List<String> extractAnnotations(Stream<String> lines) {
         return lines.filter(annotationPattern.asMatchPredicate()).collect(Collectors.toList());
     }
-
 }
