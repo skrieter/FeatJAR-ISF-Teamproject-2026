@@ -4,6 +4,8 @@ import * as vscode from 'vscode';
 import { spawn } from 'child_process';
 import * as path from 'path';
 import * as os from 'os';
+import { join } from 'node:path';
+import { homedir } from 'node:os';
 
 function runFeatJar(jarPath: string, args: string[]): Promise<string> {
     return new Promise((resolve, reject) => {

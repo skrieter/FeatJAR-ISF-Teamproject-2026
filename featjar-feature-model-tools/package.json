@@ -24,6 +24,10 @@
       {
         "command": "featjar-extension.checkSatisfiability",
         "title": "Check Satisfiability"
+      },
+       {
+        "command": "featjar-extension.openGui",
+        "title": "FeatJAR: Open GUI"
       }
     ],
     "menus": {
@@ -31,35 +35,26 @@
         {
           "command": "featjar-extension.checkSatisfiability",
           "when": "resourceExtname == .uvl || resourceExtname == .xml || resourceExtname == .dimacs"
+        },
+        {
+          "command": "featjar-extension.openGui",
+          "when": "resourceExtname == .uvl"
         }
       ]
-    }
-  },
-      },{
-        "command": "featjar-extension.openGui",
-        "title": "FeatJAR: Open GUI"
+    },
+    "customEditors": [
+      {
+        "viewType": "featjar-extension.uvlEditor",
+        "displayName": "FeatJAR GUI",
+        "selector": [
+          {
+            "filenamePattern": "*.uvl"
+          }
+        ],
+        "priority": "default"
       }
-    ],
-  "menus": {
-  "explorer/context": [
-    {
-      "command": "featjar-extension.openGui",
-      "when": "resourceExtname == .uvl"
-    }
-  ]
-},"customEditors": [
-    {
-      "viewType": "featjar-extension.uvlEditor",
-      "displayName": "FeatJAR GUI",
-      "selector": [
-        {
-          "filenamePattern": "*.uvl"
-        }
-      ],
-      "priority": "default"
-    }
-  ]
-},
+    ]
+  },
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
