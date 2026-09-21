@@ -3,6 +3,9 @@ import { GNode, RectangularNodeView, RenderingContext, svg } from '@eclipse-glsp
 import { injectable } from 'inversify';
 import { VNode } from 'snabbdom';
 
+interface GNodeWithArgs extends GNode {
+    args?: Record<string, string | number | boolean>;
+}
 /**
  * Renders every node of the feature model.
  *
@@ -34,7 +37,8 @@ export class FeatureNodeView extends RectangularNodeView {
         // const isMultiple = node.cssClasses?.includes('feature-multiple') || false;
 
         const isConstraint = node.cssClasses?.includes('constraint-node') || false;
-
+        const customColor =
+            typeof (node as GNodeWithArgs).args?.color === 'string' ? ((node as GNodeWithArgs).args!.color as string) : undefined;
         const showMandatoryMarker = isMandatory && this.hasIncomingEdgeOfType(node, 'edge-mandatory');
         const showOptionalMarker = isOptional && this.hasIncomingEdgeOfType(node, 'edge-optional');
 
@@ -120,7 +124,7 @@ export class FeatureNodeView extends RectangularNodeView {
                     width={width}
                     height={height}
                     style={{
-                        fill: isAbstract ? '#d3d3d3' : isConcrete ? '#add8e6' : 'white',
+                        fill: customColor ?? (isAbstract ? '#d3d3d3' : isConcrete ? '#add8e6' : 'white'),
                         stroke: isConstraintTitle ? 'black' : strokeColor,
                         strokeWidth: isConstraintTitle ? String(1) : String(strokeWidth)
                     }}

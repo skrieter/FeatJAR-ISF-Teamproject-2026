@@ -32,6 +32,7 @@ import de.featjar.gui.operation.handler.DeleteIdentifiableNodeHandler;
 import de.featjar.gui.operation.handler.LabelEditHandler;
 import de.featjar.gui.operation.handler.SetCardinalityFeatureBoundsHandler;
 import de.featjar.gui.operation.handler.SetCardinalityGroupNodeBoundsHandler;
+import de.featjar.gui.operation.handler.SetFeatureColorHandler;
 import de.featjar.gui.operation.handler.SetFeatureImplementationHandler;
 import de.featjar.gui.operation.handler.SetGroupNodeTypeHandler;
 import de.featjar.gui.operation.handler.create.feature.CreateMandatoryFeatureNodeHandler;
@@ -122,6 +123,7 @@ public class FeatureModelDiagramModule extends EMFNotationDiagramModule {
         binding.add(LabelEditHandler.class);
 
         binding.add(SetFeatureImplementationHandler.class);
+        binding.add(SetFeatureColorHandler.class);
         binding.add(SetGroupNodeTypeHandler.class);
 
         binding.add(SetCardinalityGroupNodeBoundsHandler.class);

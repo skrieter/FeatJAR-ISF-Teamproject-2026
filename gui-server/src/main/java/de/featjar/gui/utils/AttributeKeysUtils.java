@@ -73,4 +73,12 @@ public final class AttributeKeysUtils {
     public static boolean isHidden(Feature feature) {
         return !getAttribute(feature, AttributeKeys.HIDDEN).isEmpty();
     }
+
+    public static void setColor(Feature feature, String color) {
+        setAttribute(feature, AttributeKeys.COLOR, color);
+    }
+
+    public static Optional<String> getColor(Feature feature) {
+        return getAttribute(feature, AttributeKeys.COLOR).map(Attributes::getValue);
+    }
 }

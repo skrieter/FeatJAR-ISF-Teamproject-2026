@@ -22,4 +22,5 @@
 
 # Misc
 /test/
-/all/server_logs.log
+all/server_logs.log
+jar-check/

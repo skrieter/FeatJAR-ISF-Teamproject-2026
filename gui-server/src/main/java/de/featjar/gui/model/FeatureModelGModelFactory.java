@@ -191,7 +191,7 @@ public class FeatureModelGModelFactory extends EMFNotationGModelFactory {
                             .build());
             nodeBuilder.addArgument("lowerBound", feature.getCardinality().getLowerBound());
             nodeBuilder.addArgument("upperBound", feature.getCardinality().getUpperBound());
-
+            AttributeKeysUtils.getColor(feature).ifPresent(color -> nodeBuilder.addArgument("color", color));
         } else if (identifiable instanceof GroupNode groupNode) {
 
             int w = cssType.equals(GroupNodeType.AND_NODE.value())
