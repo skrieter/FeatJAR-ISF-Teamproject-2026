@@ -155,7 +155,7 @@ class PreprocessorValidateTest {
         List<String> problems = checkSyntax("//#if");
 
         assertEquals(1, problems.size());
-        assertEquals("line 1: Invalid annotation syntax: //#if", problems.get(0));
+        assertEquals("line 1: Invalid annotation syntax: missing condition after 'if'", problems.get(0));
     }
 
     @Test
@@ -163,7 +163,7 @@ class PreprocessorValidateTest {
         List<String> problems = checkSyntax("code", "//#unknown A");
 
         assertEquals(1, problems.size());
-        assertEquals("line 2: Invalid annotation syntax: //#unknown A", problems.get(0));
+        assertEquals("line 2: Invalid annotation syntax: unknown annotation keyword 'unknown'", problems.get(0));
     }
 
     @Test
@@ -171,7 +171,7 @@ class PreprocessorValidateTest {
         List<String> problems = checkSyntax("//#if A", "//#else extra", "normal code", "//#elif");
 
         assertEquals(2, problems.size());
-        assertEquals("line 2: Invalid annotation syntax: //#else extra", problems.get(0));
-        assertEquals("line 4: Invalid annotation syntax: //#elif", problems.get(1));
+        assertEquals("line 2: Invalid annotation syntax: unexpected content after 'else'", problems.get(0));
+        assertEquals("line 4: Invalid annotation syntax: missing condition after 'elif'", problems.get(1));
     }
 }

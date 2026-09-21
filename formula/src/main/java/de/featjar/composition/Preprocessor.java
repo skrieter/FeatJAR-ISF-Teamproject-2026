@@ -49,6 +49,7 @@ public class Preprocessor {
     private final ExpressionParser annotationParser;
 
     private final Pattern annotationPattern;
+    private final Pattern annotationPrefixPattern;
     private final Pattern startAnnotationPattern;
     private final String annotationPrefix;
 
@@ -181,6 +182,7 @@ public class Preprocessor {
         annotationParser.setSymbols(symbols);
         String prefix = Pattern.quote(annotationPrefix);
         annotationPattern = Pattern.compile(prefix + "\\s*((endif\\s*)|(else\\s*)|(if\\s+(.+))|(elif\\s+(.+)))");
+        annotationPrefixPattern = Pattern.compile("^" + prefix);
 
         startAnnotationPattern = Pattern.compile(prefix + "\\s*(if|elif)\\s+(.+)");
     }
@@ -294,18 +296,39 @@ public class Preprocessor {
             String line = it.next();
             lineNumber++;
 
-            if (!line.startsWith(annotationPrefix)) {
+            if (!annotationPrefixPattern.matcher(line).find()) {
                 continue;
             }
             Matcher matcher = annotationPattern.matcher(line);
 
             if (!matcher.matches()) {
-                problems.add(
-                        new ParseProblem("Invalid annotation syntax: " + line, Problem.Severity.ERROR, lineNumber));
+                problems.add(new ParseProblem(describeInvalidAnnotation(line), Problem.Severity.ERROR, lineNumber));
                 continue;
             }
         }
         return problems;
+    }
+
+    private String describeInvalidAnnotation(String line) {
+        String annotation = line.substring(annotationPrefix.length()).trim();
+        if (annotation.isEmpty()) {
+            return "Invalid annotation syntax: missing annotation keyword";
+        }
+
+        String[] parts = annotation.split("\\s+", 2);
+        String keyword = parts[0];
+        String remainder = parts.length > 1 ? parts[1].trim() : "";
+
+        if (!keyword.equals("if") && !keyword.equals("elif") && !keyword.equals("else") && !keyword.equals("endif")) {
+            return "Invalid annotation syntax: unknown annotation keyword '" + keyword + "'";
+        }
+        if ((keyword.equals("if") || keyword.equals("elif")) && remainder.isEmpty()) {
+            return "Invalid annotation syntax: missing condition after '" + keyword + "'";
+        }
+        if ((keyword.equals("else") || keyword.equals("endif")) && !remainder.isEmpty()) {
+            return "Invalid annotation syntax: unexpected content after '" + keyword + "'";
+        }
+        return "Invalid annotation syntax: malformed '" + keyword + "' annotation";
     }
 
     private List<ParseProblem> checkCondition(String condition, int lineNumber) {
