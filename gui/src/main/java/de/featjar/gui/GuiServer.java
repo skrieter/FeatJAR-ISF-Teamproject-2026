@@ -67,7 +67,8 @@ public class GuiServer {
                 "-cp",
                 System.getProperty("user.home") + "/.featjar-bin/gui/server/*",
                 "de.featjar.gui.FeatureModelWebsocketLauncher",
-                "-p " + String.valueOf(port));
+                "--port",
+                String.valueOf(port));
 
         FeatJAR.log().info("Server is starting...");
         ProcessBuilder pb = new ProcessBuilder(command);
@@ -83,6 +84,8 @@ public class GuiServer {
                     for (String line = reader.readLine(); line != null; line = reader.readLine()) {
                         if (processServerSignals(line)) {
                             return;
+                        } else {
+                            FeatJAR.log().debug(line);
                         }
                     }
                 } catch (final IOException e) {

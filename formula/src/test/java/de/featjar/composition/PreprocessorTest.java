@@ -21,13 +21,18 @@
 package de.featjar.composition;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import de.featjar.Common;
 import de.featjar.base.FeatJAR;
+import de.featjar.base.data.Problem.Severity;
+import de.featjar.base.io.format.ParseProblem;
 import de.featjar.base.tree.Trees;
 import de.featjar.formula.io.textual.ExpressionSerializer;
 import de.featjar.formula.io.textual.JavaSymbols;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -36,7 +41,7 @@ import org.junit.jupiter.api.Test;
  * added the unit test
  * Tests {@link Preprocessor#computePresenceConditions(java.util.stream.Stream)}.
  */
-public class PreprocessorTest {
+public class PreprocessorTest extends Common {
 
     @BeforeAll
     public static void begin() {
@@ -68,39 +73,104 @@ public class PreprocessorTest {
     }
 
     @Test
+    public void elifAnnotations() {
+        List<String> lines = List.of(
+                "//#if A",
+                "  System.out.println(\"\");",
+                "//#elif B",
+                "  System.out.println(\"\");",
+                "//#else",
+                "  System.out.println(\"\");",
+                "//#endif",
+                "  System.out.println(\"\");");
+        assertEquals(
+                List.of(
+                        "false", // //#if A
+                        "A", // inside #if A
+                        "false", // //#elif B
+                        "!A && B", // inside #elif B
+                        "false", // //#else
+                        "!A && !B", // inside #else
+                        "false", // //#endif
+                        "true"), // outside all blocks
+                presenceConditions(lines));
+    }
+
+    @Test
     public void noAnnotations() {
         assertEquals(List.of("true", "true"), presenceConditions(List.of("int a;", "int b;")));
     }
 
     @Test
-    public void validateReportsInvalidConditions() {
-        List<String> lines = List.of(
-                "//#if A oder B",
-                "  System.out.println(\"\");",
-                "//#elif A &&",
-                "//#elif (A || B",
-                "//#elif ()",
-                "//#elif 1",
-                "//#endif");
-        assertEquals(
-                List.of(
-                        "line 1: Unexpected 'oder', expected an operator.",
-                        "line 3: Missing operand for '&&'.",
-                        "line 4: Open parenthesis has no match.",
-                        "line 5: Missing condition.",
-                        "line 6: condition is not a boolean formula: \"1\""),
-                validate(lines));
+    public void featureNotInModelIsReported() {
+        List<ParseProblem> problems = new Preprocessor("//#", JavaSymbols.INSTANCE)
+                .findUnknownFeatures(
+                        Stream.of(
+                                "//#if A",
+                                "  System.out.println(\"\");",
+                                "//#else",
+                                "  System.out.println(\"\");",
+                                "//#endif"),
+                        loadFormula("GPL/model.xml"));
+
+        assertEquals(1, problems.size());
+        assertEquals("unknown feature \"A\"", problems.get(0).getMessage());
+        assertEquals(Severity.ERROR, problems.get(0).getSeverity());
+        assertEquals(1, problems.get(0).getLineNumber());
     }
 
     @Test
-    public void validateAcceptsValidConditions() {
-        List<String> lines = List.of("//#if !A", "//#elif A && (B || !C)", "//#elif A&&B", "//#else", "//#endif");
-        assertEquals(List.of(), validate(lines));
+    public void knownFeaturesAreNotReported() {
+        assertTrue(unknownFeatures(
+                        "//#if Directed && !Weighted",
+                        "a();",
+                        "//#elif BFS || DFS",
+                        "b();",
+                        "//#else",
+                        "c();",
+                        "//#endif")
+                .isEmpty());
+    }
+
+    @Test
+    public void noAnnotationsHaveNoUnknownFeatures() {
+        assertTrue(unknownFeatures("int x = 1;", "System.out.println(x);").isEmpty());
+    }
+
+    @Test
+    public void unknownFeatureInElifIsReported() {
+        assertEquals(
+                List.of("line 3: unknown feature \"B\""),
+                unknownFeatures("//#if Directed", "a();", "//#elif Undirected && B", "b();", "//#endif"));
+    }
+
+    @Test
+    public void everyUnknownFeatureOfAnAnnotationIsReported() {
+        assertEquals(
+                List.of("line 1: unknown feature \"A\"", "line 1: unknown feature \"B\""),
+                unknownFeatures("//#if A && Base || B", "a();", "//#endif"));
     }
 
     private static List<String> validate(List<String> lines) {
         return new Preprocessor("//#", JavaSymbols.INSTANCE)
                 .validate(lines.stream()).stream()
+    @Test
+    public void unknownFeatureInNestedAnnotationIsReported() {
+        assertEquals(
+                List.of("line 3: unknown feature \"C\""),
+                unknownFeatures("//#if Base", "a();", "//#if C", "b();", "//#endif", "//#endif"));
+    }
+
+    @Test
+    public void sameUnknownFeatureIsReportedOnEveryLine() {
+        assertEquals(
+                List.of("line 1: unknown feature \"A\"", "line 4: unknown feature \"A\""),
+                unknownFeatures("//#if A", "a();", "//#endif", "//#if !A", "b();", "//#endif"));
+    }
+
+    private static List<String> unknownFeatures(String... lines) {
+        return new Preprocessor("//#", JavaSymbols.INSTANCE)
+                .findUnknownFeatures(Stream.of(lines), loadFormula("GPL/model.xml")).stream()
                         .map(p -> String.format("line %d: %s", p.getLineNumber(), p.getMessage()))
                         .collect(Collectors.toList());
     }
