@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import de.featjar.base.FeatJAR;
 import de.featjar.base.tree.Trees;
+import de.featjar.formula.assignment.Assignment;
 import de.featjar.formula.io.textual.ExpressionSerializer;
 import de.featjar.formula.io.textual.JavaSymbols;
 import java.util.List;
@@ -96,12 +97,66 @@ public class PreprocessorTest {
         assertEquals(List.of("true", "true"), presenceConditions(List.of("int a;", "int b;")));
     }
 
+    @Test
+    public void cppStyle() {
+        List<String> lines = List.of("#if A", "a", "#elif B", "b", "#else", "c", "#endif");
+        Preprocessor preprocessor = new Preprocessor(Preprocessor.Style.CPP);
+        assertEquals(
+                List.of("false", "A", "false", "!A && B", "false", "!A && !B", "false"),
+                presenceConditions(preprocessor, lines));
+        assertEquals(List.of("b"), preprocess(preprocessor, lines, new Assignment("A", false, "B", true)));
+        assertEquals(List.of("A", "B"), preprocessor.extractVariableNames(lines.stream()));
+    }
+
+    @Test
+    public void antennaStyle() {
+        List<String> lines = List.of("//#if A && B", "a", "//#else", "b", "//#endif");
+        Preprocessor preprocessor = new Preprocessor(Preprocessor.Style.ANTENNA);
+        assertEquals(
+                List.of("false", "A && B", "false", "!(A && B)", "false"), presenceConditions(preprocessor, lines));
+        assertEquals(List.of("a"), preprocess(preprocessor, lines, new Assignment("A", true, "B", true)));
+    }
+
+    @Test
+    public void mungeStyle() {
+        List<String> lines = List.of("/*if[A]*/", "a", "/*else[A]*/", "b", "/*end[A]*/", "c");
+        Preprocessor preprocessor = new Preprocessor(Preprocessor.Style.MUNGE);
+        assertEquals(List.of("false", "A", "false", "!A", "false", "true"), presenceConditions(preprocessor, lines));
+        assertEquals(List.of("b", "c"), preprocess(preprocessor, lines, new Assignment("A", false)));
+        assertEquals(List.of("A"), preprocessor.extractVariableNames(lines.stream()));
+        assertEquals(
+                List.of("/*if[A]*/", "/*else[A]*/", "/*end[A]*/"), preprocessor.extractAnnotations(lines.stream()));
+        assertEquals(List.of(), preprocessor.checkStructure(lines.stream()));
+    }
+
+    @Test
+    public void mungeStyleIgnoresOtherStyles() {
+        List<String> lines = List.of("#if A", "/* comment */", "//#endif");
+        assertEquals(List.of(), new Preprocessor(Preprocessor.Style.MUNGE).extractAnnotations(lines.stream()));
+    }
+
+    @Test
+    public void customStyle() {
+        Preprocessor.Style style = new Preprocessor.Style(
+                "<!--", "-->", "IF", "ELSEIF", "ELSE", "END", " ", "", false, JavaSymbols.INSTANCE);
+        List<String> lines = List.of("<!-- IF A -->", "a", "<!-- ELSEIF B -->", "b", "<!-- END -->");
+        assertEquals(
+                List.of("false", "A", "false", "!A && B", "false"), presenceConditions(new Preprocessor(style), lines));
+    }
+
     private static List<String> presenceConditions(List<String> lines) {
+        return presenceConditions(new Preprocessor("//#", JavaSymbols.INSTANCE), lines);
+    }
+
+    private static List<String> presenceConditions(Preprocessor preprocessor, List<String> lines) {
         ExpressionSerializer serializer = new ExpressionSerializer();
         serializer.setSymbols(JavaSymbols.INSTANCE);
-        return new Preprocessor("//#", JavaSymbols.INSTANCE)
-                .computePresenceConditions(lines.stream()).stream()
-                        .map(pc -> Trees.traverse(pc, serializer).orElseThrow())
-                        .collect(Collectors.toList());
+        return preprocessor.computePresenceConditions(lines.stream()).stream()
+                .map(pc -> Trees.traverse(pc, serializer).orElseThrow())
+                .collect(Collectors.toList());
+    }
+
+    private static List<String> preprocess(Preprocessor preprocessor, List<String> lines, Assignment assignment) {
+        return preprocessor.preprocess(lines.stream(), assignment).collect(Collectors.toList());
     }
 }

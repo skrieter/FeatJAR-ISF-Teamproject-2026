@@ -26,6 +26,7 @@ import de.featjar.base.data.Problem.Severity;
 import de.featjar.base.data.Result;
 import de.featjar.base.io.format.ParseProblem;
 import de.featjar.formula.assignment.Assignment;
+import de.featjar.formula.io.textual.JavaSymbols;
 import de.featjar.formula.io.textual.Symbols;
 import de.featjar.formula.structure.IExpression;
 import de.featjar.formula.structure.IFormula;
@@ -39,6 +40,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
+import java.util.Objects;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.regex.Matcher;
@@ -48,10 +50,160 @@ import java.util.stream.Stream;
 
 public class Preprocessor {
 
+    /**
+     * Describes the syntax of annotations, i.e., their prefix and suffix, their keywords, how conditions are delimited,
+     * and the symbols used within conditions.
+     * Whitespace within any of the strings matches one or more whitespace characters.
+     * Presets for common preprocessors are available as {@link #CPP}, {@link #ANTENNA}, and {@link #MUNGE}.
+     */
+    public static final class Style {
+
+        /**
+         * The style of the C preprocessor, e.g., {@code #if A && B}, {@code #elif C}, {@code #else}, {@code #endif}.
+         */
+        public static final Style CPP =
+                new Style("#", "", "if", "elif", "else", "endif", " ", "", false, JavaSymbols.INSTANCE);
+
+        /**
+         * The style of Antenna, e.g., {@code //#if A && B}, {@code //#elif C}, {@code //#else}, {@code //#endif}.
+         */
+        public static final Style ANTENNA =
+                new Style("//#", "", "if", "elif", "else", "endif", " ", "", false, JavaSymbols.INSTANCE);
+
+        /**
+         * The style of Munge, e.g., {@code /*if[A]*}{@code /}, {@code /*else[A]*}{@code /}, {@code /*end[A]*}{@code /}.
+         * Munge has no elif, and the condition repeated after else and end is ignored.
+         * Annotations must be placed on their own line.
+         */
+        public static final Style MUNGE =
+                new Style("/*", "*/", "if", null, "else", "end", "[", "]", true, JavaSymbols.INSTANCE);
+
+        private final String prefix;
+        private final String suffix;
+        private final String ifKeyword;
+        private final String elifKeyword;
+        private final String elseKeyword;
+        private final String endifKeyword;
+        private final String conditionStart;
+        private final String conditionEnd;
+        private final boolean conditionAfterElseAndEndif;
+        private final Symbols symbols;
+
+        /**
+         * Creates a new annotation style.
+         *
+         * @param prefix the string that starts each annotation
+         * @param suffix the string that ends each annotation, may be empty
+         * @param ifKeyword the keyword that opens a block
+         * @param elifKeyword the keyword for an alternative block with a condition, {@code null} if not supported
+         * @param elseKeyword the keyword for an alternative block without a condition
+         * @param endifKeyword the keyword that closes a block
+         * @param conditionStart the string between the keyword and the condition
+         * @param conditionEnd the string after the condition, may be empty
+         * @param conditionAfterElseAndEndif whether else and endif may repeat a condition (which is ignored)
+         * @param symbols the symbols used within conditions
+         */
+        public Style(
+                String prefix,
+                String suffix,
+                String ifKeyword,
+                String elifKeyword,
+                String elseKeyword,
+                String endifKeyword,
+                String conditionStart,
+                String conditionEnd,
+                boolean conditionAfterElseAndEndif,
+                Symbols symbols) {
+            this.prefix = Objects.requireNonNull(prefix);
+            this.suffix = Objects.requireNonNull(suffix);
+            this.ifKeyword = Objects.requireNonNull(ifKeyword);
+            this.elifKeyword = elifKeyword;
+            this.elseKeyword = Objects.requireNonNull(elseKeyword);
+            this.endifKeyword = Objects.requireNonNull(endifKeyword);
+            this.conditionStart = Objects.requireNonNull(conditionStart);
+            this.conditionEnd = Objects.requireNonNull(conditionEnd);
+            this.conditionAfterElseAndEndif = conditionAfterElseAndEndif;
+            this.symbols = Objects.requireNonNull(symbols);
+        }
+
+        /**
+         * {@return a copy of this style with the given prefix}
+         *
+         * @param prefix the string that starts each annotation
+         */
+        public Style withPrefix(String prefix) {
+            return new Style(
+                    prefix,
+                    suffix,
+                    ifKeyword,
+                    elifKeyword,
+                    elseKeyword,
+                    endifKeyword,
+                    conditionStart,
+                    conditionEnd,
+                    conditionAfterElseAndEndif,
+                    symbols);
+        }
+
+        /**
+         * {@return a copy of this style with the given symbols}
+         *
+         * @param symbols the symbols used within conditions
+         */
+        public Style withSymbols(Symbols symbols) {
+            return new Style(
+                    prefix,
+                    suffix,
+                    ifKeyword,
+                    elifKeyword,
+                    elseKeyword,
+                    endifKeyword,
+                    conditionStart,
+                    conditionEnd,
+                    conditionAfterElseAndEndif,
+                    symbols);
+        }
+
+        public String getPrefix() {
+            return prefix;
+        }
+
+        public Symbols getSymbols() {
+            return symbols;
+        }
+
+        private Pattern toPattern() {
+            String ignoredCondition = conditionAfterElseAndEndif
+                    ? "(?:" + toRegex(conditionStart) + ".*" + toRegex(conditionEnd) + ")?"
+                    : "";
+            String elif = elifKeyword == null ? "(?!)" : toRegex(elifKeyword);
+            return Pattern.compile(toRegex(prefix)
+                    + "\\s*(?:"
+                    + "(?<endif>" + toRegex(endifKeyword) + ignoredCondition + "\\s*)"
+                    + "|(?<else>" + toRegex(elseKeyword) + ignoredCondition + "\\s*)"
+                    + "|(?<if>" + toRegex(ifKeyword) + condition("ifCondition") + ")"
+                    + "|(?<elif>" + elif + condition("elifCondition") + ")"
+                    + ")"
+                    + (suffix.isEmpty() ? "" : "\\s*" + toRegex(suffix) + "\\s*"));
+        }
+
+        private String condition(String groupName) {
+            return toRegex(conditionStart) + "(?<" + groupName + ">.+)" + toRegex(conditionEnd);
+        }
+
+        private static String toRegex(String text) {
+            StringBuilder regex = new StringBuilder();
+            Matcher matcher = Pattern.compile("\\s+|\\S+").matcher(text);
+            while (matcher.find()) {
+                regex.append(matcher.group().isBlank() ? "\\s+" : Pattern.quote(matcher.group()));
+            }
+            return regex.toString();
+        }
+    }
+
     private final ExpressionParser annotationParser;
 
     private final Pattern annotationPattern;
-    private final Pattern startAnnotationPattern;
 
     private class Filter implements Predicate<String> {
 
@@ -71,7 +223,7 @@ public class Preprocessor {
             lineNumber++;
             Matcher matcher = annotationPattern.matcher(line);
             if (matcher.matches()) {
-                if (matcher.group(2) != null) {
+                if (matcher.group("endif") != null) {
                     if (expressionStack.isEmpty()) {
                         FeatJAR.log().warning("Line %d: no annotation to end", lineNumber);
                     } else {
@@ -79,7 +231,7 @@ public class Preprocessor {
                         evaluationStack.pop();
                     }
                     return false;
-                } else if (matcher.group(3) != null) {
+                } else if (matcher.group("else") != null) {
                     if (expressionStack.isEmpty()) {
                         FeatJAR.log().warning("Line %d: no annotation for else", lineNumber);
                     } else {
@@ -91,7 +243,7 @@ public class Preprocessor {
                         }
                     }
                     return false;
-                } else if (matcher.group(6) != null) {
+                } else if (matcher.group("elif") != null) {
                     if (expressionStack.isEmpty()) {
                         FeatJAR.log().warning("Line %d: no annotation for elif", lineNumber);
                     } else {
@@ -102,7 +254,7 @@ public class Preprocessor {
                             evaluationStack.push(Boolean.FALSE);
                         }
                     }
-                    Result<IExpression> parse = annotationParser.parse(matcher.group(7));
+                    Result<IExpression> parse = annotationParser.parse(matcher.group("elifCondition"));
                     if (parse.isPresent()) {
                         IExpression annotationExpression = parse.get();
                         expressionStack.push(annotationExpression);
@@ -123,8 +275,8 @@ public class Preprocessor {
                         return true;
                     }
                     return false;
-                } else if (matcher.group(4) != null) {
-                    Result<IExpression> parse = annotationParser.parse(matcher.group(5));
+                } else if (matcher.group("if") != null) {
+                    Result<IExpression> parse = annotationParser.parse(matcher.group("ifCondition"));
                     if (parse.isPresent()) {
                         IExpression annotationExpression = parse.get();
                         expressionStack.push(annotationExpression);
@@ -162,9 +314,11 @@ public class Preprocessor {
         @Override
         public Stream<Variable> apply(String line) {
             lineNumber++;
-            Matcher matcher = startAnnotationPattern.matcher(line);
-            if (matcher.matches()) {
-                Result<IExpression> parse = annotationParser.parse(matcher.group(2));
+            Matcher matcher = annotationPattern.matcher(line);
+            if (matcher.matches() && (matcher.group("if") != null || matcher.group("elif") != null)) {
+                String condition =
+                        matcher.group("if") != null ? matcher.group("ifCondition") : matcher.group("elifCondition");
+                Result<IExpression> parse = annotationParser.parse(condition);
                 if (parse.isPresent()) {
                     return parse.get().getVariableStream();
                 } else {
@@ -176,13 +330,25 @@ public class Preprocessor {
         }
     }
 
+    /**
+     * Creates a preprocessor for annotations in the style of the C preprocessor with the given prefix and symbols.
+     *
+     * @param annotationPrefix the string that starts each annotation
+     * @param symbols the symbols used within conditions
+     */
     public Preprocessor(String annotationPrefix, Symbols symbols) {
-        annotationParser = new ExpressionParser();
-        annotationParser.setSymbols(symbols);
-        String prefix = Pattern.quote(annotationPrefix);
-        annotationPattern = Pattern.compile(prefix + "\\s*((endif\\s*)|(else\\s*)|(if\\s+(.+))|(elif\\s+(.+)))");
+        this(Style.CPP.withPrefix(annotationPrefix).withSymbols(symbols));
+    }
 
-        startAnnotationPattern = Pattern.compile(prefix + "\\s*(if|elif)\\s+(.+)");
+    /**
+     * Creates a preprocessor for annotations in the given style.
+     *
+     * @param style the annotation style, e.g., {@link Style#CPP}, {@link Style#ANTENNA}, or {@link Style#MUNGE}
+     */
+    public Preprocessor(Style style) {
+        annotationParser = new ExpressionParser();
+        annotationParser.setSymbols(style.getSymbols());
+        annotationPattern = style.toPattern();
     }
 
     /**
@@ -217,20 +383,22 @@ public class Preprocessor {
                         stack.descendingIterator().forEachRemaining(conjuncts::add);
                         return conjuncts.size() == 1 ? conjuncts.get(0) : new And(conjuncts);
                     }
-                    if (matcher.group(4) != null) {
-                        stack.push((IFormula)
-                                annotationParser.parse(matcher.group(5)).orElseThrow());
+                    if (matcher.group("if") != null) {
+                        stack.push((IFormula) annotationParser
+                                .parse(matcher.group("ifCondition"))
+                                .orElseThrow());
                         elifCounts.push(0);
-                    } else if (matcher.group(3) != null) {
+                    } else if (matcher.group("else") != null) {
                         stack.push(new Not(popChecked(stack, line)));
-                    } else if (matcher.group(2) != null) {
+                    } else if (matcher.group("endif") != null) {
                         popChecked(stack, line);
                         for (int i = elifCounts.pop(); i > 0; i--) stack.pop();
-                    } else if (matcher.group(6) != null) {
+                    } else if (matcher.group("elif") != null) {
                         stack.push(new Not(popChecked(stack, line)));
                         elifCounts.push(elifCounts.pop() + 1);
-                        stack.push((IFormula)
-                                annotationParser.parse(matcher.group(7)).orElseThrow());
+                        stack.push((IFormula) annotationParser
+                                .parse(matcher.group("elifCondition"))
+                                .orElseThrow());
                     }
                     return (IFormula) False.INSTANCE;
                 })
@@ -260,10 +428,10 @@ public class Preprocessor {
             Matcher matcher = annotationPattern.matcher(line);
 
             if (matcher.matches()) {
-                if (matcher.group(4) != null) { // this line is an #if (check notes.md file for more)
+                if (matcher.group("if") != null) { // this line is an #if (check notes.md file for more)
                     stack.push(lineNumber);
                     ifLines.add(lineNumber);
-                } else if (matcher.group(2) != null) { // this is an #endif
+                } else if (matcher.group("endif") != null) { // this is an #endif
                     if (stack.isEmpty()) {
                         String addIfSuggestion = lastEndifLine == 0
                                 ? "add a matching #if before line 1"
@@ -332,10 +500,10 @@ public class Preprocessor {
             Matcher matcher = annotationPattern.matcher(line);
             if (!matcher.matches()) continue;
 
-            if (matcher.group(4) != null) {
-                problems.addAll(checkCondition(matcher.group(5), lineNumber));
-            } else if (matcher.group(6) != null) {
-                problems.addAll(checkCondition(matcher.group(7), lineNumber));
+            if (matcher.group("if") != null) {
+                problems.addAll(checkCondition(matcher.group("ifCondition"), lineNumber));
+            } else if (matcher.group("elif") != null) {
+                problems.addAll(checkCondition(matcher.group("elifCondition"), lineNumber));
             }
         }
 
