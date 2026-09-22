@@ -538,7 +538,7 @@ public class Preprocessor {
         List<ParseProblem> problems = new ArrayList<>();
         List<String> lineList = lines.toList();
         for (int i = 0; i < lineList.size(); i++) {
-            Matcher matcher = startAnnotationPattern.matcher(lineList.get(i));
+            Matcher matcher = annotationPattern.matcher(lineList.get(i));
             if (matcher.matches()) {
                 int lineNumber = i + 1;
                 annotationParser.parse(matcher.group(2)).ifPresent(expression -> expression.getVariableNames().stream()
