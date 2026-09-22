@@ -31,13 +31,15 @@ import featJAR.FeatureModel;
 import featJAR.GroupNode;
 import java.util.HashSet;
 import java.util.Set;
+import de.featjar.base.data.Problem;
+import de.featjar.base.data.Result;
 /**
  * Resolves GModel IDs to their semantic elements.
  * This is possible because the {@link FeatureModelIdGenerator} uses
  * the ID of the semantic model also as GModel ID. in the whole project is no distinction
  *
  * IDs that do not belong to a semantic element, such
- * as the graph root or the constraint box, resolve to an empty result.
+ * as the graph root or the constraint box, resolve to an empty {@link Result} carrying a problem.
  */
 @Singleton
 public class IdentifiableResolver {
@@ -49,14 +51,14 @@ public class IdentifiableResolver {
      * Resolves a GModel ID to its semantic element and returns it.
      *
      * @param id the semantic ID of the searched element
-     * @return the identifiable object or an empty {@link Optional} if nothing is found.
+     * @return the identifiable object or an empty {@link Result}carying a problem  if nothing is found.
      */
-    public Optional<Identifiable> findById(final String id) {
+    public Result<Identifiable> findById(final String id) {
         if (id == null || id.isBlank()) {
-            return Optional.empty();
+            return Result.empty(new Problem("No element ID given"));
         }
         EObject found = modelState.getSemanticModel().eResource().getEObject(id);
-        return found instanceof Identifiable identifiable ? Optional.of(identifiable) : Optional.empty();
+        return found instanceof Identifiable identifiable ? Result.of(identifiable) : Result.empty(new Problem("No element found for ID: " + id));
     }
         /**
      * Collects the names of all features from the semantic model.

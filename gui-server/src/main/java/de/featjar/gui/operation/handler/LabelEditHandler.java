@@ -19,7 +19,8 @@
  * See <https://github.com/FeatureIDE> for further information.
  */
 package de.featjar.gui.operation.handler;
-
+import de.featjar.base.data.Result;
+import de.featjar.formula.structure.IFormula;
 import com.google.inject.Inject;
 import de.featjar.gui.utils.IdentifiableResolver;
 import featJAR.FeatJARPackage;
@@ -56,16 +57,16 @@ public class LabelEditHandler extends GModelOperationHandler<ApplyLabelEditOpera
           // The text the user typed in the edit box
         String newText = operation.getText();
                
-        // New for #28: a constraint is stored as text  so check that text before it is saved into the model
+        // a constraint is stored as text  so check that text before it is saved into the model
         // The validator already checks while the user types and this check makes sure a bad text can
         // never get in even if that first check was skipped.
         if (element instanceof Constraint) {
-            // Returns a message if the text is not a valid formula or names a feature that does not exist
-            Optional<String> problem =
+            //  Holds the parsed formula if the text is valid, or the problem(s) if it is not
+            Result<IFormula> result =
                     FeatureModelLabelEditValidator.findConstraintProblem(newText, resolver.findFeatureNames());
 
-            if (problem.isPresent()) {
-                FeatJAR.log().warning("Constraint edit rejected: %s", problem.get());
+            if (result.isEmpty()) {
+                FeatJAR.log().warning("Constraint edit rejected: %s", result.printProblems());
                 return Optional.empty();
             }
         }

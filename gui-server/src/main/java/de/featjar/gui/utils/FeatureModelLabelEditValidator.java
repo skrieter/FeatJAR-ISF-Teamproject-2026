@@ -37,12 +37,11 @@ import de.featjar.formula.io.textual.ExpressionParser;
 import de.featjar.formula.io.textual.ShortSymbols;
 import de.featjar.formula.structure.IExpression;
 import de.featjar.formula.structure.IFormula;
+
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Optional;
 /**
  * Validates the editing of all labels.
- *New for Issue-28:
  * The name of a feature must not be empty and must be unique. The text of a constraint must be
  * a correct formula that only refers to existing features, see {@link #findConstraintProblem(String, Set)}.
  * the validator is called while the user is typing, so problems are shown before the edit is applied (error message appears on the spot).
@@ -51,7 +50,7 @@ public class FeatureModelLabelEditValidator implements LabelEditValidator {
     @Inject
     protected GModelState modelState;
 
-// New for #28: gives us the names of all features, so we can check the names used in a constraint
+//gives us the names of all features, so we can check the names used in a constraint
     @Inject
     protected IdentifiableResolver resolver;
 
@@ -60,12 +59,12 @@ public class FeatureModelLabelEditValidator implements LabelEditValidator {
         if (label.length() < 1) {
             return ValidationStatus.error("Name must not be empty");
         }
-// New for #28: a constraint is a formula, not a name, so it gets its own checks.
+//a constraint is a formula, not a name, so it gets its own checks.
         // The duplicate-name check further down does not apply to it.
         if (isConstraint(element)) {
-            Optional<String> problem = findConstraintProblem(label, resolver.findFeatureNames());
-            if (problem.isPresent()) {
-                return ValidationStatus.error(problem.get());
+            Result<IFormula> result = findConstraintProblem(label, resolver.findFeatureNames());
+            if (result.isEmpty()) {
+                return ValidationStatus.error(result.getProblems().stream().findFirst().map(Problem::getMessage).orElse("Constraint is not a valid formula"));
             }
             return ValidationStatus.ok();
         }
@@ -93,7 +92,7 @@ public class FeatureModelLabelEditValidator implements LabelEditValidator {
         return ValidationStatus.ok();
     }
         /**
-     *New for Issue-28: Tells whether the element is a constraint or a part of one such as its label.
+        *Tells whether the element is a constraint or a part of one such as its label.
      */
     protected boolean isConstraint(final GModelElement element) {
 
@@ -117,31 +116,28 @@ public class FeatureModelLabelEditValidator implements LabelEditValidator {
      *
      * @param text the text the user entered
      * @param featureNames the names of all features of the feature model
-     * @return a message for the user, or an empty {@link Optional} if the constraint is valid
-     */
+     * @return a {@link Result} holding the parsed formula if the constraint is valid, or holding the
+       problem(s) describing why it is not     */
     /**
      * I used an AI assistant (Claude) to help design this fix. Matching this code with the rest of the source code and
 comments are done by me. I applied the changes by hand, tested them in the editor, and
 debugged the environment myself.
      */
     @SuppressWarnings("deprecation")
-    public static Optional<String> findConstraintProblem(final String text, final Set<String> featureNames) {
+    public static Result<IFormula> findConstraintProblem(final String text, final Set<String> featureNames) {
         // Same setup as in EMFFeatureModelParser#parseConstraint. Keep both in sync.
         ExpressionParser parser = new ExpressionParser();
         parser.setSymbols(ShortSymbols.INSTANCE);
 
-        //Syntax: the parser returns a readable message like missing operands or open brackets
+        //Syntax: the parser owns Result already carries readable message like missing operands or open brackets
         Result<IExpression> result = parser.parse(text);
         if (result.isEmpty()) {
-            return Optional.of(result.getProblems().stream()
-                    .findFirst()
-                    .map(Problem::getMessage)
-                    .orElse("Constraint is not a valid formula"));
+           return Result.empty(result.getProblems());
         }
 
         // The save-time parser casts the result to IFormula, so anything else would fail there
         if (!(result.get() instanceof IFormula)) {
-            return Optional.of("Constraint must be a formula");
+            return Result.empty(new Problem("Constraint must be a formula"));
         }
 
         //References: the parser accepts any name so unknown features must be checked separately.
@@ -149,9 +145,9 @@ debugged the environment myself.
         Set<String> unknown = new LinkedHashSet<>(result.get().getVariableNames());
         unknown.removeAll(featureNames);
         if (!unknown.isEmpty()) {
-            return Optional.of("Unknown feature: " + String.join(", ", unknown));
+            return Result.empty(new Problem("Unknown feature: " + String.join(", ", unknown)));
         }
 
-        return Optional.empty();
+        return Result.of((IFormula) result.get());
     }
 }
