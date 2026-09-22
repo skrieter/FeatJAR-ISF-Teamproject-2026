@@ -23,3 +23,9 @@
 # Misc
 /test/
 all/server_logs.log
+/all/server_logs.log
+
+#FeatJar VSCode Extension
+featjar-feature-model-tools/node_modules/**
+featjar-feature-model-tools/out/** 
+featjar-feature-model-tools/package-lock.json 
