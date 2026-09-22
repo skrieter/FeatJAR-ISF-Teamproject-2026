@@ -25,7 +25,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import de.featjar.AnalysisTest;
 import de.featjar.analysis.sat4j.computation.ComputeSatisfiableSAT4J;
 import de.featjar.base.computation.Computations;
-import de.featjar.composition.Preprocessor;
 import de.featjar.formula.assignment.conversion.ComputeBooleanClauseList;
 import de.featjar.formula.computation.ComputeCNFFormula;
 import de.featjar.formula.computation.ComputeNNFFormula;
@@ -83,7 +82,7 @@ public class DeadCodeTest extends AnalysisTest {
     }
 
     private static List<String> dead(String... lines) {
-        return new Preprocessor("//#", JavaSymbols.INSTANCE)
+        return new PreprocessorAnalyzer("//#", JavaSymbols.INSTANCE)
                 .findDeadCode(Stream.of(lines), consistentWith(loadFormula("GPL/model.xml")));
     }
 

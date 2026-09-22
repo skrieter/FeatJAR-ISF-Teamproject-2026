@@ -20,7 +20,7 @@
  */
 package de.featjar.analysis.sat4j.cli;
 
-import de.featjar.analysis.sat4j.Preprocessor;
+import de.featjar.analysis.sat4j.PreprocessorAnalyzer;
 import de.featjar.base.FeatJAR;
 import de.featjar.base.cli.ACommand;
 import de.featjar.base.cli.Option;
@@ -62,7 +62,7 @@ import org.sat4j.specs.ContradictionException;
 import org.sat4j.specs.ISolver;
 import org.sat4j.specs.TimeoutException;
 
-public class PreprocessorCommand extends ACommand {
+public class PreprocessorAnalyzerCommand extends ACommand {
 
     public static enum Mode {
         PROCESS,
@@ -106,7 +106,7 @@ public class PreprocessorCommand extends ACommand {
         Charset charset = StandardCharsets.UTF_8;
         String annotationPrefix = optionParser.getResult(PREFIX_OPTION).orElseThrow();
 
-        Preprocessor preprocessor = new Preprocessor(annotationPrefix, JavaSymbols.INSTANCE);
+        PreprocessorAnalyzer preprocessor = new PreprocessorAnalyzer(annotationPrefix, JavaSymbols.INSTANCE);
 
         Mode mode = optionParser.getResult(MODE_OPTION).orElseThrow();
 
@@ -170,7 +170,7 @@ public class PreprocessorCommand extends ACommand {
             Path assignmentPath,
             MissingVariables missingVariables,
             Charset charset,
-            Preprocessor preprocessor)
+            PreprocessorAnalyzer preprocessor)
             throws IOException {
         Result<Assignment> parsedAssignment = IO.load(assignmentPath, new CPPAssignmentFormat());
         if (parsedAssignment.isEmpty()) {
@@ -214,15 +214,15 @@ public class PreprocessorCommand extends ACommand {
         return new Assignment(variableValuePairs);
     }
 
-    private Stream<String> printVariableNames(Path in, Charset charset, Preprocessor preprocessor) throws IOException {
+    private Stream<String> printVariableNames(Path in, Charset charset, PreprocessorAnalyzer preprocessor) throws IOException {
         return preprocessor.extractVariableNames(Files.lines(in, charset)).stream();
     }
 
-    private Stream<String> printAnnotations(Path in, Charset charset, Preprocessor preprocessor) throws IOException {
+    private Stream<String> printAnnotations(Path in, Charset charset, PreprocessorAnalyzer preprocessor) throws IOException {
         return preprocessor.extractAnnotations(Files.lines(in, charset)).stream();
     }
 
-    private Stream<String> printPresenceConditions(Path in, Charset charset, Preprocessor preprocessor)
+    private Stream<String> printPresenceConditions(Path in, Charset charset, PreprocessorAnalyzer preprocessor)
             throws IOException {
         ExpressionSerializer serializer = new ExpressionSerializer();
         serializer.setSymbols(JavaSymbols.INSTANCE);
@@ -235,7 +235,7 @@ public class PreprocessorCommand extends ACommand {
     }
 
     private Stream<String> detectDeadCode(
-            Path in, Charset charset, Preprocessor preprocessor, OptionList optionParser) throws IOException {
+            Path in, Charset charset, PreprocessorAnalyzer preprocessor, OptionList optionParser) throws IOException {
         Path featureModelPath = optionParser.getResult(FEATURE_MODEL_OPTION).orElseThrow();
         IFormula featureModel = IO.load(featureModelPath, FormulaFormats.getInstance()).orElseThrow();
         return preprocessor.findDeadCode(Files.lines(in, charset), consistentWith(featureModel))

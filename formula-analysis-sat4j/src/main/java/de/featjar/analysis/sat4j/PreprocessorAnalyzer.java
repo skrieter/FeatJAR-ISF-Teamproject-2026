@@ -44,7 +44,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public class Preprocessor {
+public class PreprocessorAnalyzer {
 
     private final ExpressionParser annotationParser;
 
@@ -174,7 +174,7 @@ public class Preprocessor {
         }
     }
 
-    public Preprocessor(String annotationPrefix, Symbols symbols) {
+    public PreprocessorAnalyzer(String annotationPrefix, Symbols symbols) {
         annotationParser = new ExpressionParser();
         annotationParser.setSymbols(symbols);
         String prefix = Pattern.quote(annotationPrefix);
