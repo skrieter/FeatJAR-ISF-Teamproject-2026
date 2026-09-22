@@ -56,6 +56,7 @@ import org.eclipse.glsp.server.features.directediting.LabelEditValidator;
 import org.eclipse.glsp.server.features.toolpalette.ToolPaletteItemProvider;
 import org.eclipse.glsp.server.layout.LayoutEngine;
 import org.eclipse.glsp.server.operations.OperationHandler;
+import de.featjar.gui.operation.handler.ToggleShowAttributesHandler;
 
 /**
  * Determines which classes (bindings) are used.
@@ -125,6 +126,7 @@ public class FeatureModelDiagramModule extends EMFNotationDiagramModule {
         binding.add(SetFeatureImplementationHandler.class);
         binding.add(SetFeatureColorHandler.class);
         binding.add(SetGroupNodeTypeHandler.class);
+        binding.add(ToggleShowAttributesHandler.class);
 
         binding.add(SetCardinalityGroupNodeBoundsHandler.class);
         binding.add(SetCardinalityFeatureBoundsHandler.class);
