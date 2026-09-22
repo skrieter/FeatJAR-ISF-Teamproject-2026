@@ -25,12 +25,17 @@ import de.featjar.base.cli.ACommand;
 import de.featjar.base.cli.Option;
 import de.featjar.base.cli.OptionList;
 import de.featjar.base.cli.Options;
+import de.featjar.base.data.Problem;
 import de.featjar.base.data.Result;
 import de.featjar.base.io.IO;
+import de.featjar.base.tree.Trees;
 import de.featjar.composition.Preprocessor;
 import de.featjar.formula.assignment.Assignment;
+import de.featjar.formula.io.FormulaFormats;
 import de.featjar.formula.io.textual.CPPAssignmentFormat;
+import de.featjar.formula.io.textual.ExpressionSerializer;
 import de.featjar.formula.io.textual.JavaSymbols;
+import de.featjar.formula.structure.IFormula;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.nio.charset.Charset;
@@ -48,7 +53,10 @@ public class PreprocessorCommand extends ACommand {
     public static enum Mode {
         PROCESS,
         PRINT_VARIABLES,
-        PRINT_ANNOTATIONS
+        PRINT_ANNOTATIONS,
+        CHECK_STRUCTURE,
+        FIND_UNKNOWN_FEATURES,
+        PRINT_PRESENCE_CONDITIONS
     }
 
     public static enum MissingVariables {
@@ -59,6 +67,10 @@ public class PreprocessorCommand extends ACommand {
 
     public static final Option<Path> CONFIGURATION_OPTION = Options.newOption("configuration", Options.PathParser)
             .setDescription("Path to configuration file")
+            .setValidator(Options.PathValidator);
+
+    public static final Option<Path> FEATURE_MODEL_OPTION = Options.newOption("feature-model", Options.PathParser)
+            .setDescription("Path to feature model file")
             .setValidator(Options.PathValidator);
 
     public static final Option<Mode> MODE_OPTION = Options.newEnumOption("mode", Mode.class)
@@ -88,6 +100,8 @@ public class PreprocessorCommand extends ACommand {
         Stream<String> stream = null;
         try {
             switch (mode) {
+                case CHECK_STRUCTURE:
+                    return checkStructure(in, charset, preprocessor);
                 case PROCESS:
                     stream = preprocess(
                             in,
@@ -102,6 +116,13 @@ public class PreprocessorCommand extends ACommand {
                     break;
                 case PRINT_ANNOTATIONS:
                     stream = printAnnotations(in, charset, preprocessor);
+                    break;
+                case PRINT_PRESENCE_CONDITIONS:
+                    stream = printPresenceConditions(in, charset, preprocessor);
+                    break;
+                case FIND_UNKNOWN_FEATURES:
+                    stream = findUnknownFeatures(
+                            in, optionParser.getResult(FEATURE_MODEL_OPTION).orElseThrow(), charset, preprocessor);
                     break;
                 default:
                     return 1;
@@ -131,6 +152,16 @@ public class PreprocessorCommand extends ACommand {
             stream.forEach(FeatJAR.log()::plainMessage);
         }
         return 0;
+    }
+
+    private int checkStructure(Path file, Charset charset, Preprocessor preprocessor) throws IOException {
+        List<Problem> problems;
+        try (Stream<String> lines = Files.lines(file, charset)) {
+            problems = preprocessor.checkStructure(lines);
+        }
+
+        FeatJAR.log().problems(problems);
+        return (problems.isEmpty() ? 0 : 1);
     }
 
     private Stream<String> preprocess(
@@ -189,6 +220,25 @@ public class PreprocessorCommand extends ACommand {
 
     private Stream<String> printAnnotations(Path in, Charset charset, Preprocessor preprocessor) throws IOException {
         return preprocessor.extractAnnotations(Files.lines(in, charset)).stream();
+    }
+
+    private Stream<String> printPresenceConditions(Path in, Charset charset, Preprocessor preprocessor)
+            throws IOException {
+        ExpressionSerializer serializer = new ExpressionSerializer();
+        serializer.setSymbols(JavaSymbols.INSTANCE);
+        return preprocessor.computePresenceConditions(Files.lines(in, charset)).stream()
+                .map(formula -> Trees.traverse(formula, serializer).orElseThrow());
+    }
+
+    private Stream<String> findUnknownFeatures(
+            Path in, Path featureModelPath, Charset charset, Preprocessor preprocessor) throws IOException {
+        Result<IFormula> featureModel = IO.load(featureModelPath, FormulaFormats.getInstance());
+        if (featureModel.isEmpty()) {
+            FeatJAR.log().problems(featureModel);
+            return Stream.empty();
+        }
+        return preprocessor.findUnknownFeatures(Files.lines(in, charset), featureModel.get()).stream()
+                .map(problem -> String.format("line %d: %s", problem.getLineNumber(), problem.getMessage()));
     }
 
     @Override

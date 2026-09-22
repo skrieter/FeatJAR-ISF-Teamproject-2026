@@ -22,6 +22,7 @@
 
 # Misc
 /test/
+all/server_logs.log
 /all/server_logs.log
 
 #FeatJar VSCode Extension
