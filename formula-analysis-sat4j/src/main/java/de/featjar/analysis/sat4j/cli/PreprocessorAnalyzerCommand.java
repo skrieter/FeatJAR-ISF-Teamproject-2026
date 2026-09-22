@@ -69,7 +69,8 @@ public class PreprocessorAnalyzerCommand extends ACommand {
         PRINT_VARIABLES,
         PRINT_ANNOTATIONS,
         PRINT_PRESENCE_CONDITIONS,
-        FIND_DEAD_CODE
+        FIND_DEAD_CODE,
+        PRINT_SUPERFLUOUS_ANNOTATIONS
     }
 
     public static enum MissingVariables {
@@ -134,10 +135,13 @@ public class PreprocessorAnalyzerCommand extends ACommand {
                 case FIND_DEAD_CODE:
                     stream = detectDeadCode(in, charset, preprocessor, optionParser);
                     break;
+                case PRINT_SUPERFLUOUS_ANNOTATIONS:
+                    stream = printSuperfluousAnnotations(in, charset, preprocessor, optionParser);
+                    break;
                 default:
                     return 1;
             }
-        } catch (IOException e) {
+        } catch (IOException | IllegalArgumentException e) {
             FeatJAR.log().error(e);
             return 1;
         }
@@ -240,6 +244,16 @@ public class PreprocessorAnalyzerCommand extends ACommand {
         IFormula featureModel = IO.load(featureModelPath, FormulaFormats.getInstance()).orElseThrow();
         return preprocessor.findDeadCode(Files.lines(in, charset), consistentWith(featureModel))
                 .stream();
+    }
+
+    private Stream<String> printSuperfluousAnnotations(
+            Path in, Charset charset, PreprocessorAnalyzer preprocessor, OptionList optionParser) throws IOException {
+        Path featureModelPath = optionParser.getResult(FEATURE_MODEL_OPTION).orElseThrow();
+        IFormula featureModel = IO.load(featureModelPath, FormulaFormats.getInstance()).orElseThrow();
+        try (Stream<String> lines = Files.lines(in, charset)) {
+            return preprocessor.findSuperfluousAnnotations(lines, consistentWith(featureModel))
+                    .stream();
+        }
     }
 
     /**

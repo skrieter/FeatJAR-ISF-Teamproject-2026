@@ -279,4 +279,59 @@ public class PreprocessorAnalyzer {
         }
         return dead;
     }
+
+    /** Returns annotations whose effective condition holds in every valid configuration. */
+    public List<String> findSuperfluousAnnotations(Stream<String> lines, Predicate<IFormula> isSatisfiable) {
+        List<String> result = new ArrayList<>();
+        LinkedList<IFormula> stack = new LinkedList<>();
+        LinkedList<Integer> elifCounts = new LinkedList<>();
+        int lineNumber = 0;
+        for (String line : (Iterable<String>) lines.sequential()::iterator) {
+            lineNumber++;
+            Matcher matcher = annotationPattern.matcher(line);
+            if (!matcher.matches()) {
+                continue;
+            }
+            if (matcher.group(2) != null) {
+                popChecked(stack, line);
+                for (int i = elifCounts.pop(); i > 0; i--) stack.pop();
+                continue;
+            }
+            IFormula currentCondition;
+            if (matcher.group(4) != null) {
+                stack.push(parseBooleanCondition(matcher.group(5), lineNumber));
+                elifCounts.push(0);
+            } else if (matcher.group(6) != null) {
+                stack.push(new Not(popChecked(stack, line)));
+                elifCounts.push(elifCounts.pop() + 1);
+                stack.push(parseBooleanCondition(matcher.group(7), lineNumber));
+            } else if (matcher.group(3) != null) {
+                stack.push(new Not(popChecked(stack, line)));
+            } else {
+                throw new IllegalArgumentException("Line " + lineNumber + ": invalid annotation");
+            }
+            if (stack.isEmpty()) {
+                currentCondition = True.INSTANCE;
+            } else {
+                List<IFormula> conjuncts = new ArrayList<>();
+                stack.descendingIterator().forEachRemaining(conjuncts::add);
+                currentCondition = conjuncts.size() == 1 ? conjuncts.get(0) : new And(conjuncts);
+            }
+            if (!isSatisfiable.test(new Not(currentCondition))) {
+                result.add("Line " + lineNumber + ": " + line);
+            }
+        }
+        if (!stack.isEmpty()) {
+            throw new IllegalArgumentException("Unclosed annotation block");
+        }
+        return result;
+    }
+
+    private IFormula parseBooleanCondition(String text, int lineNumber) {
+        Result<IExpression> parsed = annotationParser.parse(text);
+        if (parsed.isEmpty() || !(parsed.get() instanceof IFormula)) {
+            throw new IllegalArgumentException("Line " + lineNumber + ": invalid Boolean condition: " + text);
+        }
+        return (IFormula) parsed.get();
+    }
 }
