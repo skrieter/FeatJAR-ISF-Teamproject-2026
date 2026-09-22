@@ -39,6 +39,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.regex.Matcher;
@@ -356,6 +357,29 @@ public class Preprocessor {
                     lineNumber));
         }
         return List.of();
+    }
+
+    /**
+     * {@return a problem for each feature used in an annotation that does not occur in the feature model, including its line number}
+     *
+     * @param lines the line stream
+     * @param featureModel the feature model
+     */
+    public List<ParseProblem> findUnknownFeatures(Stream<String> lines, IFormula featureModel) {
+        Set<String> features = featureModel.getVariableNames();
+        List<ParseProblem> problems = new ArrayList<>();
+        List<String> lineList = lines.toList();
+        for (int i = 0; i < lineList.size(); i++) {
+            Matcher matcher = startAnnotationPattern.matcher(lineList.get(i));
+            if (matcher.matches()) {
+                int lineNumber = i + 1;
+                annotationParser.parse(matcher.group(2)).ifPresent(expression -> expression.getVariableNames().stream()
+                        .filter(name -> !features.contains(name))
+                        .forEach(name -> problems.add(new ParseProblem(
+                                String.format("unknown feature \"%s\"", name), Severity.ERROR, lineNumber))));
+            }
+        }
+        return problems;
     }
 
     public List<String> extractAnnotations(Stream<String> lines) {
