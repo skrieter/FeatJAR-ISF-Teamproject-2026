@@ -541,10 +541,13 @@ public class Preprocessor {
             Matcher matcher = annotationPattern.matcher(lineList.get(i));
             if (matcher.matches()) {
                 int lineNumber = i + 1;
-                annotationParser.parse(matcher.group(2)).ifPresent(expression -> expression.getVariableNames().stream()
-                        .filter(name -> !features.contains(name))
-                        .forEach(name -> problems.add(new ParseProblem(
-                                String.format("unknown feature \"%s\"", name), Severity.ERROR, lineNumber))));
+                String condition = matcher.group(4) != null ? matcher.group(4) : matcher.group(6);
+                if (condition != null) {
+                    annotationParser.parse(condition).ifPresent(expression -> expression.getVariableNames().stream()
+                            .filter(name -> !features.contains(name))
+                            .forEach(name -> problems.add(new ParseProblem(
+                                    String.format("unknown feature \"%s\"", name), Severity.ERROR, lineNumber))));
+                }
             }
         }
         return problems;

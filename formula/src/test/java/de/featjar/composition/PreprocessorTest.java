@@ -147,6 +147,9 @@ public class PreprocessorTest extends Common {
         List<String> lines = List.of("<!-- IF A -->", "a", "<!-- ELSEIF B -->", "b", "<!-- END -->");
         assertEquals(
                 List.of("false", "A", "false", "!A && B", "false"), presenceConditions(new Preprocessor(style), lines));
+    }
+
+    @Test
     public void featureNotInModelIsReported() {
         List<ParseProblem> problems = new Preprocessor("//#", JavaSymbols.INSTANCE)
                 .findUnknownFeatures(
