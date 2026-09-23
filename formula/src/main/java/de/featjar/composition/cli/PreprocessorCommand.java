@@ -69,8 +69,7 @@ public class PreprocessorCommand extends ACommand {
             Options.newOption("configuration", Options.ExistingPathParser).setDescription("Path to configuration file");
 
     public static final Option<Path> FEATURE_MODEL_OPTION = Options.newOption("feature-model", Options.PathParser)
-            .setDescription("Path to feature model file")
-            .setValidator(Options.PathValidator);
+            .setDescription("Path to feature model file"); 
 
     public static final Option<Mode> MODE_OPTION = Options.newEnumOption("mode", Mode.class)
             .setDefaultArgument(Mode.PROCESS.name())
