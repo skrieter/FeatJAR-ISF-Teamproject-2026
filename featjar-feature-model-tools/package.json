@@ -40,6 +40,11 @@
       {
         "command": "featjar-extension.modelTest",
        "title": "model stats "
+      },
+      {
+        "command": "featjar-extension.refreshUvlFiles",
+        "title": "Refresh UVL Files",
+        "icon": "$(refresh)"
       }
     ],
     "menus": {
@@ -68,7 +73,14 @@
         "command": "featjar-extension.modelTest",
         "when": "view == uvlFiles"
     }
-    ]
+    ],
+    "view/title": [
+    {
+        "command": "featjar-extension.refreshUvlFiles",
+        "when": "view == uvlFiles",
+        "group": "navigation"
+    }
+]
     },
     "customEditors": [
       {
@@ -87,7 +99,7 @@
         {
           "id": "featjarBar",
           "title": "FeatJar",
-          "icon": "resources/featjar.svg"
+          "icon": "resources/treeICON.svg"
         }
       ]
     },
@@ -96,7 +108,7 @@
         {
           "id": "uvlFiles",
           "name": "UVL Files",
-          "icon": "resources/featjar.svg"
+          "icon": "resources/treeICON.svg"
         }
       ]
     }
