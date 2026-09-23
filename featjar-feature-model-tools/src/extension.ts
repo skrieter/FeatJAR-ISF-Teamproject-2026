@@ -3,14 +3,10 @@ import { ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-type ShellResult = {
-	output: string;
-};
-
 let extensionShell: ChildProcessWithoutNullStreams | undefined;
 let shellOutputBuffer = '';
 let resolveShellReady: (() => void) | undefined;
-const pendingCommands: Array<(result: ShellResult) => void> = [];
+const pendingCommands: Array<(output: string) => void> = [];
 
 function featJarPath(): string {
 	return path.join(os.homedir(), '.featjar-bin', 'feat.jar');
@@ -19,11 +15,8 @@ function featJarPath(): string {
 function startExtensionShell(jarPath: string): Promise<void> {
 	extensionShell = spawn(
 		'java',
-		['-jar', jarPath],
-		{
-			windowsHide: true,
-			stdio: 'pipe',
-		},
+		['-cp', jarPath, 'de.featjar.base.shell.ExtensionShell'],
+		{ windowsHide: true, stdio: 'pipe' },
 	);
 
 	extensionShell.stdout.setEncoding('utf8');
@@ -37,40 +30,30 @@ function startExtensionShell(jarPath: string): Promise<void> {
 function readShellOutput(data: string): void {
 	shellOutputBuffer += data;
 
-	const promptIndex = shellOutputBuffer.indexOf('$ ');
+	let lineBreakIndex: number;
+	while ((lineBreakIndex = shellOutputBuffer.indexOf('\n')) >= 0) {
+		const line = shellOutputBuffer.slice(0, lineBreakIndex).replace(/\r$/, '');
+		shellOutputBuffer = shellOutputBuffer.slice(lineBreakIndex + 1);
 
-	if (promptIndex === -1) {
-		return;
+		if (line === 'READY') {
+			if (resolveShellReady !== undefined) {
+				resolveShellReady();
+			}
+			continue;
+		}
+
+		if (line.startsWith('RESULT\t')) {
+			const fields = line.split('\t', 2);
+			const resolveCommand = pendingCommands.shift();
+			resolveCommand?.(Buffer.from(fields[1], 'base64url').toString('utf8'));
+		}
 	}
-
-	const output = shellOutputBuffer.slice(0, promptIndex);
-
-	shellOutputBuffer =
-		shellOutputBuffer.slice(promptIndex + 2);
-
-	// First "$ " = shell startup
-	if (resolveShellReady) {
-		resolveShellReady();
-		resolveShellReady = undefined;
-		return;
-	}
-
-	// Later "$ " = previous command finished
-	const resolveCommand = pendingCommands.shift();
-
-	resolveCommand?.({
-		output: output.trim(),
-	});
 }
 
-function executeInExtensionShell(args: string[]): Promise<ShellResult> {
+function executeInExtensionShell(args: string[]): Promise<string> {
 	return new Promise(resolve => {
 		pendingCommands.push(resolve);
-
-		const command =
-			`execute ${args.join(' ')}\n`;
-
-		extensionShell?.stdin.write(command);
+		extensionShell?.stdin.write(`RUN\t${args.join('\t')}\n`);
 	});
 }
 
@@ -88,22 +71,21 @@ function openGui(uri: vscode.Uri): void {
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
 	await startExtensionShell(featJarPath());
-	
-	vscode.window.showInformationMessage('Ready');
+
 	const checkSatisfiability = vscode.commands.registerCommand(
 		'featjar-extension.checkSatisfiability',
 		async (uri: vscode.Uri) => {
-			const result = await executeInExtensionShell([
-	'solutions-sat4j',
-	'--input',
-	uri.fsPath,
-	'--limit',
-	'1',
-	'--format',
-	'SimpleCSV',
-]);
+			const output = await executeInExtensionShell([
+				'solutions-sat4j',
+				'--input',
+				uri.fsPath,
+				'--limit',
+				'1',
+				'--format',
+				'SimpleCSV',
+			]);
 
-			const satisfiable = result.output
+			const satisfiable = output
 				.split('\n')
 				.some(line => line.startsWith('0;'));
 			void vscode.window.showInformationMessage(
@@ -130,9 +112,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 			},
 		},
 	);
-	context.subscriptions.push(testCommand);
+
 	context.subscriptions.push(checkSatisfiability, openFeatJarGui, uvlEditorProvider);
 }
 
 export function deactivate(): void {
+	extensionShell?.stdin.write('SHUTDOWN\n');
 }

@@ -14,20 +14,16 @@
   "contributes": {
     "commands": [
       {
-        "command": "featjar-extension.helloWorld",
-        "title": "Hello World"
-      },
-      {
-        "command": "featjar-extension.hellovscode",
-        "title": "Hello VSCode"
-      },
-      {
         "command": "featjar-extension.checkSatisfiability",
         "title": "Check Satisfiability"
       },
        {
         "command": "featjar-extension.openGui",
         "title": "FeatJAR: Open GUI"
+      },
+      {
+        "command": "featjar-extension.TestCommand",
+        "title": "FeatJAR: Test command"
       }
     ],
     "menus": {
