@@ -136,3 +136,34 @@
 .feature-color-toolbar-button:hover {
     background: #e8e8e8;
 }
+/* Feature search bar */
+
+.feature-search-bar {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: white;
+    border: 1px solid #888;
+    border-radius: 4px;
+    padding: 6px 10px;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.feature-search-bar input {
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    padding: 4px 8px;
+    font-size: 14px;
+    width: 220px;
+}
+
+.feature-search-bar-counter {
+    font-size: 13px;
+    color: #555;
+    min-width: 40px;
+}
