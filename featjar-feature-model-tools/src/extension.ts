@@ -113,7 +113,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 		},
 	);
 
-	context.subscriptions.push(checkSatisfiability, openFeatJarGui, uvlEditorProvider);
+context.subscriptions.push(checkSatisfiability, openFeatJarGui, uvlEditorProvider, testCommand);
 }
 
 export function deactivate(): void {
