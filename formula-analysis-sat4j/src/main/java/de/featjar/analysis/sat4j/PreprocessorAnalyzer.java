@@ -20,10 +20,11 @@
  */
 package de.featjar.analysis.sat4j;
 
+import de.featjar.analysis.sat4j.computation.ComputeSatisfiableSAT4J;
 import de.featjar.base.computation.Computations;
 import de.featjar.base.tree.Trees;
 import de.featjar.composition.Preprocessor;
-import de.featjar.formula.assignment.BooleanAssignment;
+import de.featjar.formula.VariableMap;
 import de.featjar.formula.assignment.BooleanAssignmentList;
 import de.featjar.formula.assignment.conversion.ComputeBooleanClauseList;
 import de.featjar.formula.computation.ComputeCNFFormula;
@@ -31,17 +32,11 @@ import de.featjar.formula.computation.ComputeNNFFormula;
 import de.featjar.formula.io.textual.ExpressionSerializer;
 import de.featjar.formula.io.textual.Symbols;
 import de.featjar.formula.structure.IFormula;
-import de.featjar.formula.structure.connective.And;
-import de.featjar.formula.structure.connective.Reference;
 import de.featjar.formula.structure.predicate.False;
+import de.featjar.formula.structure.predicate.True;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
-import org.sat4j.core.VecInt;
-import org.sat4j.minisat.SolverFactory;
-import org.sat4j.specs.ContradictionException;
-import org.sat4j.specs.ISolver;
-import org.sat4j.specs.TimeoutException;
 
 public class PreprocessorAnalyzer extends Preprocessor {
 
@@ -57,20 +52,30 @@ public class PreprocessorAnalyzer extends Preprocessor {
      * @param featureModel the feature model
      */
     public List<String> findDeadCode(Stream<String> lines, IFormula featureModel) {
-        IFormula model = featureModel instanceof Reference ref ? ref.getExpression() : featureModel;
         List<IFormula> presence = computePresenceConditions(lines);
         ExpressionSerializer serializer = new ExpressionSerializer();
         serializer.setSymbols(getSymbols());
         List<String> dead = new ArrayList<>();
+
+        // Compute the CNF of the feature model once (ComputeNNFFORMULA deals with the reference)
+        BooleanAssignmentList modelClauses = Computations.of(featureModel)
+                .map(ComputeNNFFormula::new)
+                .map(ComputeCNFFormula::new)
+                .map(ComputeBooleanClauseList::new)
+                .compute();
+
         // a code block is a maximal run of lines between annotations, which have the presence condition False
         for (int start = 0, i = 0; i <= presence.size(); i++) {
             if (i == presence.size() || presence.get(i) == False.INSTANCE) {
-                if (start < i && !isSatisfiable(new And(model, presence.get(start)))) {
-                    dead.add(String.format(
-                            "Dead code at lines %d-%d: %s",
-                            start + 1,
-                            i,
-                            Trees.traverse(presence.get(start), serializer).orElseThrow()));
+                if (start < i) {
+                    IFormula presenceCondition = presence.get(start);
+                    if (!isSatisfiable(modelClauses, presenceCondition)) {
+                        dead.add(String.format(
+                                "Dead code at lines %d-%d: %s",
+                                start + 1,
+                                i,
+                                Trees.traverse(presenceCondition, serializer).orElseThrow()));
+                    }
                 }
                 start = i + 1;
             }
@@ -79,24 +84,38 @@ public class PreprocessorAnalyzer extends Preprocessor {
     }
 
     /**
-     * {@return whether the given formula has a satisfying assignment}
+     * {@return whether the given presence condition is satisfiable together with the model}
+     *
+     * Uses {@link ComputeSatisfiableSAT4J} with the model's clause list as the base
+     * and the presence condition's clause list as an assumed clause list.
+     * This avoids recomputing the CNF of the model for every block.
      */
-    private static boolean isSatisfiable(IFormula formula) {
-        BooleanAssignmentList clauses = Computations.of(formula)
+    private static boolean isSatisfiable(BooleanAssignmentList modelClauses, IFormula presenceCondition) {
+        // A True condition is always satisfiable (assuming the model itself is satisfiable)
+        if (presenceCondition == True.INSTANCE) {
+            return true;
+        }
+        // A False condition is never satisfiable
+        if (presenceCondition == False.INSTANCE) {
+            return false;
+        }
+
+        // Compute the CNF of the presence condition
+        BooleanAssignmentList presenceClauses = Computations.of(presenceCondition)
                 .map(ComputeNNFFormula::new)
                 .map(ComputeCNFFormula::new)
                 .map(ComputeBooleanClauseList::new)
                 .compute();
 
-        ISolver solver = SolverFactory.newDefault();
-        solver.newVar(clauses.getVariableMap().size());
-        try {
-            for (BooleanAssignment clause : clauses) {
-                solver.addClause(new VecInt(clause.get()));
-            }
-            return solver.isSatisfiable();
-        } catch (ContradictionException | TimeoutException e) {
-            return false;
-        }
+        // Merge variable maps so that both clause lists use the same indices
+        VariableMap mergedMap = new VariableMap(modelClauses.getVariableMap(), presenceClauses.getVariableMap());
+        BooleanAssignmentList remappedModelClauses = modelClauses.remap(mergedMap, false);
+        BooleanAssignmentList remappedPresenceClauses = presenceClauses.remap(mergedMap, false);
+
+        // Use ComputeSatisfiableSAT4J directly with the assumed clause list
+        return Computations.of(remappedModelClauses)
+                .map(ComputeSatisfiableSAT4J::new)
+                .set(ComputeSatisfiableSAT4J.ASSUMED_CLAUSE_LIST, remappedPresenceClauses)
+                .compute();
     }
 }

@@ -108,7 +108,8 @@ public class PreprocessorAnalyzerCommand extends ACommand {
     private Stream<String> detectDeadCode(
             Path in, Charset charset, PreprocessorAnalyzer preprocessor, OptionList optionParser) throws IOException {
         Path featureModelPath = optionParser.getResult(FEATURE_MODEL_OPTION).orElseThrow();
-        IFormula featureModel = IO.load(featureModelPath, FormulaFormats.getInstance()).orElseThrow();
+        IFormula featureModel =
+                IO.load(featureModelPath, FormulaFormats.getInstance()).orElseThrow();
         return preprocessor.findDeadCode(Files.lines(in, charset), featureModel).stream();
     }
 
