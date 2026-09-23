@@ -1,97 +1,138 @@
-// The module 'vscode' contains the VS Code extensibility API
-// Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
-import { spawn } from 'child_process';
-import * as path from 'path';
-import * as os from 'os';
-import { join } from 'node:path';
-import { homedir } from 'node:os';
+import { ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
+import * as os from 'node:os';
+import * as path from 'node:path';
 
-function runFeatJar(jarPath: string, args: string[]): Promise<string> {
-    return new Promise((resolve, reject) => {
-        const child = spawn('java', ['-jar', jarPath, ...args], {
-            windowsHide: true,
-            stdio: ['ignore', 'pipe', 'ignore']
-        });
-        let output = '';
-        child.stdout.setEncoding('utf8');
-        child.stdout.on('data', data => {
-            output += data;
-        });
-        child.on('error', reject);
-        child.on('close', () => resolve(output));
-    });
+type ShellResult = {
+	output: string;
+};
+
+let extensionShell: ChildProcessWithoutNullStreams | undefined;
+let shellOutputBuffer = '';
+let resolveShellReady: (() => void) | undefined;
+const pendingCommands: Array<(result: ShellResult) => void> = [];
+
+function featJarPath(): string {
+	return path.join(os.homedir(), '.featjar-bin', 'feat.jar');
 }
 
-// This method is called when your extension is activated
-// Your extension is activated the very first time the command is executed
-function openGui(uri: vscode.Uri) {
-	const featjarPath = path.join(os.homedir(),'.featjar-bin','feat.jar');
-	const process = spawn('java',['-jar', featjarPath, 'gui', '--input', uri.fsPath]);
-	process.stdout.on('data', (data) => {
-	const output = data.toString();
-
-	if (output.includes('URL:')) {
-		const parts = output.split('URL:');
-		const url = parts[1].trim();
-
-		vscode.commands.executeCommand(
-			'simpleBrowser.show',
-			url
-		);
-	}
-	});
-}
-export function activate(context: vscode.ExtensionContext) {
-
-	// Use the console to output diagnostic information (console.log) and errors (console.error)
-	// This line of code will only be executed once when your extension is activated
-	console.log('Congratulations, your extension "FeatJar Extension" is now active!');
-
-	// The command has been defined in the package.json file
-	// Now provide the implementation of the command with registerCommand
-	// The commandId parameter must match the command field in package.json
-	const disposable = vscode.commands.registerCommand('featjar-extension.helloWorld', () => {
-		// The code you place here will be executed every time your command is executed
-		// Display a message box to the user
-		vscode.window.showInformationMessage('Hello World from World!');
-	});
-	const disposable2 = vscode.commands.registerCommand('featjar-extension.hellovscode', () => {
-		// The code you place here will be executed every time your command is executed
-		// Display a message box to the user
-		vscode.window.showWarningMessage('This is a warning message from VSCode!');
-	});
-	const checkSatisfiability = vscode.commands.registerCommand('featjar-extension.checkSatisfiability', async (uri: vscode.Uri) => {
-        const jarPath = join(homedir(), '.featjar-bin', 'feat.jar');
-
-        const result = await runFeatJar(jarPath, ['solutions-sat4j', '--input', uri.fsPath, '--limit', '1', '--format', 'SimpleCSV']);
-        // The first configuration in SimpleCSV starts with "0;".
-        const satisfiable = result.split('\n').some(line => line.startsWith('0;'));
-        vscode.window.showInformationMessage(satisfiable ? 'The model is satisfiable.' : 'The model is not satisfiable.', { modal: true });
-    });		
-	
-	context.subscriptions.push(disposable);
-	context.subscriptions.push(disposable2);
-	context.subscriptions.push(checkSatisfiability);
-	const disposable3 = vscode.commands.registerCommand('featjar-extension.openGui',(uri: vscode.Uri) => {openGui(uri);});
-	// AI-assisted: Register a custom editor for UVL files
-	// and open the FeatJAR GUI when a UVL file is opened.
-	const uvlEditorProvider = vscode.window.registerCustomEditorProvider('featjar-extension.uvlEditor',
-	{
-		resolveCustomTextEditor(
-			document: vscode.TextDocument,
-			webviewPanel: vscode.WebviewPanel
-		) {
-			openGui(document.uri);
-		}
-	}
+function startExtensionShell(jarPath: string): Promise<void> {
+	extensionShell = spawn(
+		'java',
+		['-jar', jarPath],
+		{
+			windowsHide: true,
+			stdio: 'pipe',
+		},
 	);
 
-	context.subscriptions.push(disposable);
-	context.subscriptions.push(disposable2);
-	context.subscriptions.push(disposable3);	
-	context.subscriptions.push(uvlEditorProvider);
+	extensionShell.stdout.setEncoding('utf8');
+	extensionShell.stdout.on('data', (data: string) => readShellOutput(data));
+
+	return new Promise(resolve => {
+		resolveShellReady = resolve;
+	});
 }
 
-// This method is called when your extension is deactivated
-export function deactivate() {}
+function readShellOutput(data: string): void {
+	shellOutputBuffer += data;
+
+	const promptIndex = shellOutputBuffer.indexOf('$ ');
+
+	if (promptIndex === -1) {
+		return;
+	}
+
+	const output = shellOutputBuffer.slice(0, promptIndex);
+
+	shellOutputBuffer =
+		shellOutputBuffer.slice(promptIndex + 2);
+
+	// First "$ " = shell startup
+	if (resolveShellReady) {
+		resolveShellReady();
+		resolveShellReady = undefined;
+		return;
+	}
+
+	// Later "$ " = previous command finished
+	const resolveCommand = pendingCommands.shift();
+
+	resolveCommand?.({
+		output: output.trim(),
+	});
+}
+
+function executeInExtensionShell(args: string[]): Promise<ShellResult> {
+	return new Promise(resolve => {
+		pendingCommands.push(resolve);
+
+		const command =
+			`execute ${args.join(' ')}\n`;
+
+		extensionShell?.stdin.write(command);
+	});
+}
+
+function openGui(uri: vscode.Uri): void {
+	const process = spawn('java', ['-jar', featJarPath(), 'gui', '--input', uri.fsPath]);
+	process.stdout.on('data', data => {
+		const output = data.toString();
+
+		if (output.includes('URL:')) {
+			const url = output.split('URL:')[1].trim();
+			void vscode.commands.executeCommand('simpleBrowser.show', url);
+		}
+	});
+}
+
+export async function activate(context: vscode.ExtensionContext): Promise<void> {
+	await startExtensionShell(featJarPath());
+	
+	vscode.window.showInformationMessage('Ready');
+	const checkSatisfiability = vscode.commands.registerCommand(
+		'featjar-extension.checkSatisfiability',
+		async (uri: vscode.Uri) => {
+			const result = await executeInExtensionShell([
+	'solutions-sat4j',
+	'--input',
+	uri.fsPath,
+	'--limit',
+	'1',
+	'--format',
+	'SimpleCSV',
+]);
+
+			const satisfiable = result.output
+				.split('\n')
+				.some(line => line.startsWith('0;'));
+			void vscode.window.showInformationMessage(
+				satisfiable ? 'The model is satisfiable.' : 'The model is not satisfiable.',
+				{ modal: true },
+			);
+		},
+	);
+
+	const openFeatJarGui = vscode.commands.registerCommand(
+		'featjar-extension.openGui',
+		(uri: vscode.Uri) => openGui(uri),
+	);
+	const testCommand = vscode.commands.registerCommand(
+		'featjar-extension.TestCommand',() => {
+			vscode.window.showInformationMessage('Test command executed successfully!');
+		});
+
+	const uvlEditorProvider = vscode.window.registerCustomEditorProvider(
+		'featjar-extension.uvlEditor',
+		{
+			resolveCustomTextEditor(document: vscode.TextDocument) {
+				openGui(document.uri);
+			},
+		},
+	);
+	context.subscriptions.push(testCommand);
+	context.subscriptions.push(checkSatisfiability, openFeatJarGui, uvlEditorProvider);
+}
+
+export function deactivate(): void {
+}
