@@ -52,7 +52,9 @@ public class Preprocessor {
     private final ExpressionParser annotationParser;
 
     private final Pattern annotationPattern;
+    private final Pattern annotationPrefixPattern;
     private final Pattern startAnnotationPattern;
+    private final String annotationPrefix;
 
     private class Filter implements Predicate<String> {
 
@@ -178,10 +180,12 @@ public class Preprocessor {
     }
 
     public Preprocessor(String annotationPrefix, Symbols symbols) {
+        this.annotationPrefix = annotationPrefix;
         annotationParser = new ExpressionParser();
         annotationParser.setSymbols(symbols);
         String prefix = Pattern.quote(annotationPrefix);
         annotationPattern = Pattern.compile(prefix + "\\s*((endif\\s*)|(else\\s*)|(if\\s+(.+))|(elif\\s+(.+)))");
+        annotationPrefixPattern = Pattern.compile("^" + prefix);
 
         startAnnotationPattern = Pattern.compile(prefix + "\\s*(if|elif)\\s+(.+)");
     }
@@ -281,6 +285,20 @@ public class Preprocessor {
             }
         }
 
+            if (matcher.group(4) != null) {
+                stack.addLast(
+                        (IFormula) annotationParser.parse(matcher.group(5)).orElseThrow());
+            } else if (matcher.group(3) != null) {
+                if (stack.isEmpty()) {
+                    FeatJAR.log().warning("Line %d: no annotation for else", lineNumber);
+                } else {
+                    stack.addLast(new Not(stack.removeLast()));
+                }
+            } else if (matcher.group(2) != null) {
+                if (stack.isEmpty()) {
+                    FeatJAR.log().warning("Line %d: no annotation to end", lineNumber);
+                } else {
+                    stack.removeLast();
         // the remaining #if lines have no matching #endif
         ListIterator<Integer> iterator = ifLines.listIterator();
         while (!stack.isEmpty()) {
@@ -341,6 +359,56 @@ public class Preprocessor {
         }
 
         return problems;
+    }
+
+    /**
+     * {@return a problem for each annotation with a syntactically invalid condition, including its line number}
+     *
+     * @param lines the line stream
+     */
+    public List<ParseProblem> checkSyntax(Stream<String> lines) {
+        List<ParseProblem> problems = new ArrayList<>();
+
+        Iterator<String> it = lines.iterator();
+        int lineNumber = 0;
+
+        while (it.hasNext()) {
+            String line = it.next();
+            lineNumber++;
+
+            if (!annotationPrefixPattern.matcher(line).find()) {
+                continue;
+            }
+            Matcher matcher = annotationPattern.matcher(line);
+
+            if (!matcher.matches()) {
+                problems.add(new ParseProblem(describeInvalidAnnotation(line), Problem.Severity.ERROR, lineNumber));
+                continue;
+            }
+        }
+        return problems;
+    }
+
+    private String describeInvalidAnnotation(String line) {
+        String annotation = line.substring(annotationPrefix.length()).trim();
+        if (annotation.isEmpty()) {
+            return "Invalid annotation syntax: missing annotation keyword";
+        }
+
+        String[] parts = annotation.split("\\s+", 2);
+        String keyword = parts[0];
+        String remainder = parts.length > 1 ? parts[1].trim() : "";
+
+        if (!keyword.equals("if") && !keyword.equals("elif") && !keyword.equals("else") && !keyword.equals("endif")) {
+            return "Invalid annotation syntax: unknown annotation keyword '" + keyword + "'";
+        }
+        if ((keyword.equals("if") || keyword.equals("elif")) && remainder.isEmpty()) {
+            return "Invalid annotation syntax: missing condition after '" + keyword + "'";
+        }
+        if ((keyword.equals("else") || keyword.equals("endif")) && !remainder.isEmpty()) {
+            return "Invalid annotation syntax: unexpected content after '" + keyword + "'";
+        }
+        return "Invalid annotation syntax: malformed '" + keyword + "' annotation";
     }
 
     private List<ParseProblem> checkCondition(String condition, int lineNumber) {

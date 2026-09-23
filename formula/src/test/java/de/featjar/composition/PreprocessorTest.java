@@ -151,6 +151,9 @@ public class PreprocessorTest extends Common {
                 unknownFeatures("//#if A && Base || B", "a();", "//#endif"));
     }
 
+    private static List<String> validate(List<String> lines) {
+        return new Preprocessor("//#", JavaSymbols.INSTANCE)
+                .validate(lines.stream()).stream()
     @Test
     public void unknownFeatureInNestedAnnotationIsReported() {
         assertEquals(
