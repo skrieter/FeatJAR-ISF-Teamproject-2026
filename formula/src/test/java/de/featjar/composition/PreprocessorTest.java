@@ -21,10 +21,12 @@
 package de.featjar.composition;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import de.featjar.Common;
 import de.featjar.base.FeatJAR;
+import de.featjar.base.data.Problem;
 import de.featjar.base.data.Problem.Severity;
 import de.featjar.base.io.format.ParseProblem;
 import de.featjar.base.tree.Trees;
@@ -147,6 +149,52 @@ public class PreprocessorTest extends Common {
         List<String> lines = List.of("<!-- IF A -->", "a", "<!-- ELSEIF B -->", "b", "<!-- END -->");
         assertEquals(
                 List.of("false", "A", "false", "!A && B", "false"), presenceConditions(new Preprocessor(style), lines));
+    }
+
+    @Test
+    public void wrongStyleRecognizesNoAnnotations() {
+        List<String> lines = List.of("/*if[A]*/", "a", "/*end[A]*/");
+        Preprocessor preprocessor = new Preprocessor(Preprocessor.Style.CPP);
+        assertEquals(List.of(), preprocessor.extractAnnotations(lines.stream()));
+        assertEquals(List.of(), preprocessor.checkStructure(lines.stream()));
+        assertEquals(List.of("true", "true", "true"), presenceConditions(preprocessor, lines));
+        assertEquals(lines, preprocess(preprocessor, lines, new Assignment("A", false)));
+    }
+
+    @Test
+    public void wrongStyleReportsUnbalancedAnnotations() {
+        List<String> lines = List.of("#if A", "a", "//#endif");
+        Preprocessor preprocessor = new Preprocessor(Preprocessor.Style.ANTENNA);
+        List<Problem> problems = preprocessor.checkStructure(lines.stream());
+        assertEquals(1, problems.size());
+        assertTrue(problems.get(0).getMessage().startsWith("#endif without #if"));
+        assertEquals(3, ((ParseProblem) problems.get(0)).getLineNumber());
+        assertThrows(IllegalArgumentException.class, () -> preprocessor.computePresenceConditions(lines.stream()));
+    }
+
+    @Test
+    public void prefixAndSuffixWithSymbolCharacters() {
+        Preprocessor.Style style =
+                new Preprocessor.Style("(*", "*)", "if", "elif", "else", "endif", " ", "", false, JavaSymbols.INSTANCE);
+        List<String> lines = List.of("(* if !(A && B) *)", "a", "(* elif A || B *)", "b", "(* endif *)");
+        Preprocessor preprocessor = new Preprocessor(style);
+        assertEquals(List.of("A", "B"), preprocessor.extractVariableNames(lines.stream()));
+        assertEquals(List.of("a"), preprocess(preprocessor, lines, new Assignment("A", false, "B", false)));
+        assertEquals(List.of("b"), preprocess(preprocessor, lines, new Assignment("A", true, "B", true)));
+
+        List<String> negationPrefix = List.of("!if !A", "a", "!endif");
+        assertEquals(
+                List.of("a"),
+                preprocess(new Preprocessor("!", JavaSymbols.INSTANCE), negationPrefix, new Assignment("A", false)));
+    }
+
+    @Test
+    public void emptyPrefixIsRejected() {
+        assertThrows(IllegalArgumentException.class, () -> new Preprocessor("", JavaSymbols.INSTANCE));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new Preprocessor.Style(
+                        "", "", "if", "elif", "else", "endif", " ", "", false, JavaSymbols.INSTANCE));
     }
 
     @Test
