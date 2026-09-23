@@ -56,7 +56,8 @@ public class PreprocessorCommand extends ACommand {
         PRINT_ANNOTATIONS,
         CHECK_STRUCTURE,
         FIND_UNKNOWN_FEATURES,
-        PRINT_PRESENCE_CONDITIONS
+        PRINT_PRESENCE_CONDITIONS,
+        PARTIAL_PROCESS
     }
 
     public static enum MissingVariables {
@@ -110,6 +111,10 @@ public class PreprocessorCommand extends ACommand {
                             optionParser.getResult(MISSING_VARIABLES_OPTION).orElseThrow(),
                             charset,
                             preprocessor);
+                    break;
+                case PARTIAL_PROCESS:
+                    stream = preprocessPartially(
+                            in, optionParser.getResult(CONFIGURATION_OPTION).orElseThrow(), charset, preprocessor);
                     break;
                 case PRINT_VARIABLES:
                     stream = printVariableNames(in, charset, preprocessor);
@@ -201,6 +206,16 @@ public class PreprocessorCommand extends ACommand {
         }
 
         return preprocessor.preprocess(Files.lines(in, charset), assignment);
+    }
+
+    private Stream<String> preprocessPartially(Path in, Path assignmentPath, Charset charset, Preprocessor preprocessor)
+            throws IOException {
+        Result<Assignment> parsedAssignment = IO.load(assignmentPath, new CPPAssignmentFormat());
+        if (parsedAssignment.isEmpty()) {
+            FeatJAR.log().problems(parsedAssignment);
+            return Stream.empty();
+        }
+        return preprocessor.preprocessPartially(Files.lines(in, charset), parsedAssignment.get());
     }
 
     private Assignment addMissingVariablesToAssignment(
