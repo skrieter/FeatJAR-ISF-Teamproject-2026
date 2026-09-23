@@ -23,17 +23,8 @@ package de.featjar.analysis.sat4j;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import de.featjar.AnalysisTest;
-import de.featjar.analysis.sat4j.computation.ComputeSatisfiableSAT4J;
-import de.featjar.base.computation.Computations;
-import de.featjar.formula.assignment.conversion.ComputeBooleanClauseList;
-import de.featjar.formula.computation.ComputeCNFFormula;
-import de.featjar.formula.computation.ComputeNNFFormula;
 import de.featjar.formula.io.textual.JavaSymbols;
-import de.featjar.formula.structure.IFormula;
-import de.featjar.formula.structure.connective.And;
-import de.featjar.formula.structure.connective.Reference;
 import java.util.List;
-import java.util.function.Predicate;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 
@@ -83,19 +74,6 @@ public class DeadCodeTest extends AnalysisTest {
 
     private static List<String> dead(String... lines) {
         return new PreprocessorAnalyzer("//#", JavaSymbols.INSTANCE)
-                .findDeadCode(Stream.of(lines), consistentWith(loadFormula("GPL/model.xml")));
-    }
-
-    /**
-     * {@return a test whether a presence condition can be true in some configuration of the feature model}
-     */
-    private static Predicate<IFormula> consistentWith(IFormula featureModel) {
-        IFormula model = featureModel instanceof Reference reference ? reference.getExpression() : featureModel;
-        return condition -> Computations.of((IFormula) new And(model, condition))
-                .map(ComputeNNFFormula::new)
-                .map(ComputeCNFFormula::new)
-                .map(ComputeBooleanClauseList::new)
-                .map(ComputeSatisfiableSAT4J::new)
-                .compute();
+                .findDeadCode(Stream.of(lines), loadFormula("GPL/model.xml"));
     }
 }

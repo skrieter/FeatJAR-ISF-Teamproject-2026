@@ -20,254 +20,52 @@
  */
 package de.featjar.analysis.sat4j;
 
-import de.featjar.base.FeatJAR;
-import de.featjar.base.data.Result;
+import de.featjar.base.computation.Computations;
 import de.featjar.base.tree.Trees;
-import de.featjar.composition.ExpressionParser;
-import de.featjar.formula.assignment.Assignment;
+import de.featjar.composition.Preprocessor;
+import de.featjar.formula.assignment.BooleanAssignment;
+import de.featjar.formula.assignment.BooleanAssignmentList;
+import de.featjar.formula.assignment.conversion.ComputeBooleanClauseList;
+import de.featjar.formula.computation.ComputeCNFFormula;
+import de.featjar.formula.computation.ComputeNNFFormula;
 import de.featjar.formula.io.textual.ExpressionSerializer;
 import de.featjar.formula.io.textual.Symbols;
-import de.featjar.formula.structure.IExpression;
 import de.featjar.formula.structure.IFormula;
 import de.featjar.formula.structure.connective.And;
-import de.featjar.formula.structure.connective.Not;
+import de.featjar.formula.structure.connective.Reference;
 import de.featjar.formula.structure.predicate.False;
-import de.featjar.formula.structure.predicate.True;
-import de.featjar.formula.structure.term.value.Variable;
 import java.util.ArrayList;
-import java.util.LinkedList;
 import java.util.List;
-import java.util.function.Function;
-import java.util.function.Predicate;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import org.sat4j.core.VecInt;
+import org.sat4j.minisat.SolverFactory;
+import org.sat4j.specs.ContradictionException;
+import org.sat4j.specs.ISolver;
+import org.sat4j.specs.TimeoutException;
 
-public class PreprocessorAnalyzer {
-
-    private final ExpressionParser annotationParser;
-
-    private final Pattern annotationPattern;
-    private final Pattern startAnnotationPattern;
-
-    private class Filter implements Predicate<String> {
-
-        private final Assignment assignment;
-
-        private final LinkedList<IExpression> expressionStack = new LinkedList<>();
-        private final LinkedList<Boolean> evaluationStack = new LinkedList<>();
-
-        private int lineNumber;
-
-        public Filter(Assignment assignment) {
-            this.assignment = assignment;
-        }
-
-        @Override
-        public boolean test(String line) {
-            lineNumber++;
-            Matcher matcher = annotationPattern.matcher(line);
-            if (matcher.matches()) {
-                if (matcher.group(2) != null) {
-                    if (expressionStack.isEmpty()) {
-                        FeatJAR.log().warning("Line %d: no annotation to end", lineNumber);
-                    } else {
-                        expressionStack.pop();
-                        evaluationStack.pop();
-                    }
-                    return false;
-                } else if (matcher.group(3) != null) {
-                    if (expressionStack.isEmpty()) {
-                        FeatJAR.log().warning("Line %d: no annotation for else", lineNumber);
-                    } else {
-                        Boolean eval = evaluationStack.pop();
-                        if (evaluationStack.isEmpty() || evaluationStack.peek()) {
-                            evaluationStack.push(!eval);
-                        } else {
-                            evaluationStack.push(Boolean.FALSE);
-                        }
-                    }
-                    return false;
-                } else if (matcher.group(6) != null) {
-                    if (expressionStack.isEmpty()) {
-                        FeatJAR.log().warning("Line %d: no annotation for elif", lineNumber);
-                    } else {
-                        Boolean eval = evaluationStack.pop();
-                        if (evaluationStack.isEmpty() || evaluationStack.peek()) {
-                            evaluationStack.push(!eval);
-                        } else {
-                            evaluationStack.push(Boolean.FALSE);
-                        }
-                    }
-                    Result<IExpression> parse = annotationParser.parse(matcher.group(7));
-                    if (parse.isPresent()) {
-                        IExpression annotationExpression = parse.get();
-                        expressionStack.push(annotationExpression);
-                        if (evaluationStack.isEmpty() || evaluationStack.peek()) {
-                            Object evaluation =
-                                    annotationExpression.evaluate(assignment).orElse(null);
-                            if (evaluation instanceof Boolean) {
-                                evaluationStack.push((Boolean) evaluation);
-                            } else {
-                                FeatJAR.log().warning("Line %d: could not evaluate annotation: %s", lineNumber, line);
-                                evaluationStack.push(Boolean.FALSE);
-                            }
-                        } else {
-                            evaluationStack.push(Boolean.FALSE);
-                        }
-                    } else {
-                        FeatJAR.log().warning("Line %d: could not parse annotation: %s", lineNumber, line);
-                        return true;
-                    }
-                    return false;
-                } else if (matcher.group(4) != null) {
-                    Result<IExpression> parse = annotationParser.parse(matcher.group(5));
-                    if (parse.isPresent()) {
-                        IExpression annotationExpression = parse.get();
-                        expressionStack.push(annotationExpression);
-                        if (evaluationStack.isEmpty() || evaluationStack.peek()) {
-                            Object evaluation =
-                                    annotationExpression.evaluate(assignment).orElse(null);
-                            if (evaluation instanceof Boolean) {
-                                evaluationStack.push((Boolean) evaluation);
-                            } else {
-                                FeatJAR.log().warning("Line %d: could not evaluate annotation: %s", lineNumber, line);
-                                evaluationStack.push(Boolean.FALSE);
-                            }
-                        } else {
-                            evaluationStack.push(Boolean.FALSE);
-                        }
-                        return false;
-                    } else {
-                        FeatJAR.log().warning("Line %d: could not parse annotation: %s", lineNumber, line);
-                        return true;
-                    }
-                } else {
-                    FeatJAR.log().warning("Line %d: syntax error: %s", lineNumber, line);
-                    return true;
-                }
-            } else {
-                return evaluationStack.isEmpty() || evaluationStack.peek();
-            }
-        }
-    }
-
-    private class VariableNames implements Function<String, Stream<Variable>> {
-
-        private int lineNumber;
-
-        @Override
-        public Stream<Variable> apply(String line) {
-            lineNumber++;
-            Matcher matcher = startAnnotationPattern.matcher(line);
-            if (matcher.matches()) {
-                Result<IExpression> parse = annotationParser.parse(matcher.group(2));
-                if (parse.isPresent()) {
-                    return parse.get().getVariableStream();
-                } else {
-                    FeatJAR.log().warning("Line %d: could not parse annotation: %s", lineNumber, line);
-                    return null;
-                }
-            }
-            return null;
-        }
-    }
+public class PreprocessorAnalyzer extends Preprocessor {
 
     public PreprocessorAnalyzer(String annotationPrefix, Symbols symbols) {
-        annotationParser = new ExpressionParser();
-        annotationParser.setSymbols(symbols);
-        String prefix = Pattern.quote(annotationPrefix);
-        annotationPattern = Pattern.compile(prefix + "\\s*((endif\\s*)|(else\\s*)|(if\\s+(.+))|(elif\\s+(.+)))");
-
-        startAnnotationPattern = Pattern.compile(prefix + "\\s*(if|elif)\\s+(.+)");
+        super(annotationPrefix, symbols);
     }
 
     /**
-     * {@return a filtered stream that contains only lines that remain after preprocessing with the given variable assignment}
-     *
-     * <b>Note</b>: The return stream is <b>not state less</b>.
-     * It is not suitable for parallel consumption.
+     * {@return one message per block of code lines whose presence condition is not satisfiable
+     * together with the given feature model}
      *
      * @param lines the line stream
-     * @param assignment the variable assignment
+     * @param featureModel the feature model
      */
-    public Stream<String> preprocess(Stream<String> lines, Assignment assignment) {
-        return lines.sequential().filter(new Filter(assignment));
-    }
-
-    /**
-     * {@return the presence condition of each line, in order}
-     *
-     * @param lines the line stream
-     */
-    public List<IFormula> computePresenceConditions(Stream<String> lines) {
-        LinkedList<IFormula> stack = new LinkedList<>();
-        LinkedList<Integer> elifCounts = new LinkedList<>(); // each elif adds one extra stack entry to its if
-        return lines.sequential()
-                .map(line -> {
-                    Matcher matcher = annotationPattern.matcher(line);
-                    if (!matcher.matches()) {
-                        if (stack.isEmpty()) {
-                            return (IFormula) True.INSTANCE;
-                        }
-                        List<IFormula> conjuncts = new ArrayList<>();
-                        stack.descendingIterator().forEachRemaining(conjuncts::add);
-                        return conjuncts.size() == 1 ? conjuncts.get(0) : new And(conjuncts);
-                    }
-                    if (matcher.group(4) != null) {
-                        stack.push((IFormula)
-                                annotationParser.parse(matcher.group(5)).orElseThrow());
-                        elifCounts.push(0);
-                    } else if (matcher.group(3) != null) {
-                        stack.push(new Not(popChecked(stack, line)));
-                    } else if (matcher.group(2) != null) {
-                        popChecked(stack, line);
-                        for (int i = elifCounts.pop(); i > 0; i--) stack.pop();
-                    } else if (matcher.group(6) != null) {
-                        stack.push(new Not(popChecked(stack, line)));
-                        elifCounts.push(elifCounts.pop() + 1);
-                        stack.push((IFormula)
-                                annotationParser.parse(matcher.group(7)).orElseThrow());
-                    }
-                    return (IFormula) False.INSTANCE;
-                })
-                .collect(Collectors.toList());
-    }
-
-    private IFormula popChecked(LinkedList<IFormula> stack, String line) {
-        if (stack.isEmpty()) {
-            throw new IllegalArgumentException("Unbalanced presence annotation (empty stack): " + line);
-        }
-        return stack.pop();
-    }
-
-    public List<String> extractVariableNames(Stream<String> lines) {
-        return lines.flatMap(new VariableNames())
-                .distinct()
-                .map(Variable::getName)
-                .collect(Collectors.toList());
-    }
-
-    public List<String> extractAnnotations(Stream<String> lines) {
-        return lines.filter(annotationPattern.asMatchPredicate()).collect(Collectors.toList());
-    }
-
-    /**
-     * {@return one message per block of code lines whose presence condition is not satisfiable}
-     *
-     * @param lines the line stream
-     * @param isSatisfiable tests a presence condition, e.g., together with a feature model
-     */
-    public List<String> findDeadCode(Stream<String> lines, Predicate<IFormula> isSatisfiable) {
+    public List<String> findDeadCode(Stream<String> lines, IFormula featureModel) {
+        IFormula model = featureModel instanceof Reference ref ? ref.getExpression() : featureModel;
         List<IFormula> presence = computePresenceConditions(lines);
         ExpressionSerializer serializer = new ExpressionSerializer();
-        serializer.setSymbols(annotationParser.getSymbols());
+        serializer.setSymbols(getSymbols());
         List<String> dead = new ArrayList<>();
         // a code block is a maximal run of lines between annotations, which have the presence condition False
         for (int start = 0, i = 0; i <= presence.size(); i++) {
             if (i == presence.size() || presence.get(i) == False.INSTANCE) {
-                if (start < i && !isSatisfiable.test(presence.get(start))) {
+                if (start < i && !isSatisfiable(new And(model, presence.get(start)))) {
                     dead.add(String.format(
                             "Dead code at lines %d-%d: %s",
                             start + 1,
@@ -278,5 +76,27 @@ public class PreprocessorAnalyzer {
             }
         }
         return dead;
+    }
+
+    /**
+     * {@return whether the given formula has a satisfying assignment}
+     */
+    private static boolean isSatisfiable(IFormula formula) {
+        BooleanAssignmentList clauses = Computations.of(formula)
+                .map(ComputeNNFFormula::new)
+                .map(ComputeCNFFormula::new)
+                .map(ComputeBooleanClauseList::new)
+                .compute();
+
+        ISolver solver = SolverFactory.newDefault();
+        solver.newVar(clauses.getVariableMap().size());
+        try {
+            for (BooleanAssignment clause : clauses) {
+                solver.addClause(new VecInt(clause.get()));
+            }
+            return solver.isSatisfiable();
+        } catch (ContradictionException | TimeoutException e) {
+            return false;
+        }
     }
 }
