@@ -58,10 +58,11 @@ public class Preprocessor {
     private static final String START_CONDITION_GROUP = "startCondition";
 
     private final ExpressionParser annotationParser;
-     // this will return the symbols used to parse annotation conditions}
+    // this will return the symbols used to parse annotation conditions}
     public Symbols getSymbols() {
         return annotationParser.getSymbols();
     }
+
     private final Pattern annotationPattern;
     private final Pattern startAnnotationPattern;
 
