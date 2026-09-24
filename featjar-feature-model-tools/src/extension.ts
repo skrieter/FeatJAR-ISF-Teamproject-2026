@@ -57,6 +57,15 @@ function executeInExtensionShell(args: string[]): Promise<string> {
 	});
 }
 
+function isErrorResult(output: string): boolean {
+	if (!output.startsWith('ERROR:')) {
+		return false;
+	}
+
+	void vscode.window.showErrorMessage(output);
+	return true;
+}
+
 function openGui(uri: vscode.Uri): void {
 	const process = spawn('java', ['-jar', featJarPath(), 'gui', '--input', uri.fsPath]);
 	process.stdout.on('data', data => {
@@ -84,6 +93,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 				'--format',
 				'SimpleCSV',
 			]);
+
+			if (isErrorResult(output)) {
+				return;
+			}
 
 			const satisfiable = output
 				.split('\n')

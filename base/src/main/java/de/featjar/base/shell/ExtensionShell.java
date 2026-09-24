@@ -96,12 +96,19 @@ public final class ExtensionShell {
     }
 
     private static void runRequest(String line, ByteArrayOutputStream commandBytes, PrintStream protocolOutput) {
-        final Request request = parseRequest(line);
         commandBytes.reset();
-        FeatJAR.runInternally(request.arguments());
-        final String output = commandBytes.toString(StandardCharsets.UTF_8);
-        protocolOutput.printf("RESULT\t%s%n", encode(output));
-        protocolOutput.flush();
+        try {
+            final Request request = parseRequest(line);
+            FeatJAR.runInternally(request.arguments());
+            final String output = commandBytes.toString(StandardCharsets.UTF_8);
+            protocolOutput.printf("RESULT\t%s%n", encode(output));
+        } catch (Exception exception) {
+            protocolOutput.printf(
+                    "RESULT\t%s%n",
+                    encode("ERROR: " + exception.getMessage()));
+        } finally {
+            protocolOutput.flush();
+        }
     }
 
     private static Request parseRequest(String line) {
