@@ -6,18 +6,20 @@ export interface FeatureMatch {
 }
 
 /**
- * Finds every named, non-constraint element whose label contains the given
- * search text (case-insensitive). An empty search text matches everything.
+ * Finds every feature node whose name contains the given search text
+ * (case-insensitive). Only actual features match — group nodes
+ * (AND/OR/XOR), their cardinality labels, and constraints are excluded.
+ * An empty search text matches every feature.
  */
 export function findMatchingElements(root: Readonly<GModelRoot>, text: string): FeatureMatch[] {
     const matches: FeatureMatch[] = [];
 
     for (const element of root.index.all()) {
-        const label = getElementLabel(element);
         const css: string[] = (element as any).cssClasses ?? [];
-        if (css.some(c => c.includes('constraint'))) {
+        if (!css.some(c => c.includes('feature-'))) {
             continue;
         }
+        const label=getElementLabel(element);
         if (!label) {
             continue;
         }
