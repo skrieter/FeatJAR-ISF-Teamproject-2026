@@ -54,6 +54,7 @@ public class PreprocessorCommand extends ACommand {
         PROCESS,
         PRINT_VARIABLES,
         PRINT_ANNOTATIONS,
+        CHECK_SYNTAX,
         CHECK_STRUCTURE,
         FIND_UNKNOWN_FEATURES,
         PRINT_PRESENCE_CONDITIONS,
@@ -124,6 +125,9 @@ public class PreprocessorCommand extends ACommand {
                     break;
                 case PRINT_PRESENCE_CONDITIONS:
                     stream = printPresenceConditions(in, charset, preprocessor);
+                    break;
+                case CHECK_SYNTAX:
+                    stream = detectInvalidSyntax(in, charset, preprocessor);
                     break;
                 case FIND_UNKNOWN_FEATURES:
                     stream = findUnknownFeatures(
@@ -243,6 +247,11 @@ public class PreprocessorCommand extends ACommand {
         serializer.setSymbols(JavaSymbols.INSTANCE);
         return preprocessor.computePresenceConditions(Files.lines(in, charset)).stream()
                 .map(formula -> Trees.traverse(formula, serializer).orElseThrow());
+    }
+
+    private Stream<String> detectInvalidSyntax(Path in, Charset charset, Preprocessor preprocessor) throws IOException {
+        return preprocessor.checkSyntax(Files.lines(in, charset)).stream()
+                .map(problem -> String.format("Line %d: %s", problem.getLineNumber(), problem.getMessage()));
     }
 
     private Stream<String> findUnknownFeatures(
