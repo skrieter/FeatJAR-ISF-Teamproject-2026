@@ -61,7 +61,7 @@ public class Preprocessor {
     /**
      * Describes the syntax of annotations, i.e., their prefix and suffix, their keywords, how conditions are delimited,
      * and the symbols used within conditions.
-     * All strings are matched literally.
+     * All strings are matched literally, including whitespace within them.
      * Presets for common preprocessors are available as {@link #CPP}, {@link #ANTENNA}, and {@link #MUNGE}.
      */
     public static final class Style {
@@ -110,6 +110,7 @@ public class Preprocessor {
          * @param conditionEnd the string after the condition, may be empty
          * @param conditionAfterElseAndEndif whether else and endif may repeat a condition (which is ignored)
          * @param symbols the symbols used within conditions
+         * @throws IllegalArgumentException if the prefix is empty
          */
         public Style(
                 String prefix,
@@ -140,7 +141,8 @@ public class Preprocessor {
         /**
          * {@return a copy of this style with the given prefix}
          *
-         * @param prefix the string that starts each annotation
+         * @param prefix the string that starts each annotation, must not be empty
+         * @throws IllegalArgumentException if the prefix is empty
          */
         public Style withPrefix(String prefix) {
             return new Style(
@@ -188,14 +190,16 @@ public class Preprocessor {
                     ? "(?:" + Pattern.quote(conditionStart) + ".*" + Pattern.quote(conditionEnd) + ")?"
                     : "";
             String elif = elifKeyword == null ? "(?!)" : Pattern.quote(elifKeyword);
-            return Pattern.compile(Pattern.quote(prefix)
+            String regex = Pattern.quote(prefix)
                     + "\\s*(?:"
                     + group(ENDIF_GROUP, Pattern.quote(endifKeyword) + ignoredCondition + "\\s*")
                     + "|" + group(ELSE_GROUP, Pattern.quote(elseKeyword) + ignoredCondition + "\\s*")
                     + "|" + group(IF_GROUP, Pattern.quote(ifKeyword) + condition(IF_CONDITION_GROUP))
                     + "|" + group(ELIF_GROUP, elif + condition(ELIF_CONDITION_GROUP))
                     + ")"
-                    + (suffix.isEmpty() ? "" : "\\s*" + Pattern.quote(suffix) + "\\s*"));
+                    + (suffix.isEmpty() ? "" : "\\s*" + Pattern.quote(suffix) + "\\s*");
+            FeatJAR.log().debug("annotation pattern: %s", regex);
+            return Pattern.compile(regex);
         }
 
         private String condition(String groupName) {
@@ -342,8 +346,9 @@ public class Preprocessor {
     /**
      * Creates a preprocessor for annotations in the style of the C preprocessor with the given prefix and symbols.
      *
-     * @param annotationPrefix the string that starts each annotation
+     * @param annotationPrefix the string that starts each annotation, must not be empty
      * @param symbols the symbols used within conditions
+     * @throws IllegalArgumentException if the prefix is empty
      */
     public Preprocessor(String annotationPrefix, Symbols symbols) {
         this(Style.CPP.withPrefix(annotationPrefix).withSymbols(symbols));
@@ -360,7 +365,6 @@ public class Preprocessor {
         annotationPattern = style.toPattern();
         annotationPrefix = style.getPrefix();
         annotationPrefixPattern = Pattern.compile("^" + Pattern.quote(annotationPrefix));
-        FeatJAR.log().debug("annotation pattern: %s", annotationPattern.pattern());
     }
 
     /**
