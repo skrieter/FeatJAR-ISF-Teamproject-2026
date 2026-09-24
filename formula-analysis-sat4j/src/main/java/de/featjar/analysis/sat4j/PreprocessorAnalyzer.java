@@ -91,28 +91,22 @@ public class PreprocessorAnalyzer extends Preprocessor {
      * This avoids recomputing the CNF of the model for every block.
      */
     private static boolean isSatisfiable(BooleanAssignmentList modelClauses, IFormula presenceCondition) {
-        // A True condition is always satisfiable (assuming the model itself is satisfiable)
         if (presenceCondition == True.INSTANCE) {
             return true;
         }
-        // A False condition is never satisfiable
         if (presenceCondition == False.INSTANCE) {
             return false;
         }
 
-        // Compute the CNF of the presence condition
-        BooleanAssignmentList presenceClauses = Computations.of(presenceCondition)
-                .map(ComputeNNFFormula::new)
-                .map(ComputeCNFFormula::new)
-                .map(ComputeBooleanClauseList::new)
-                .compute();
+        IFormula cnfPresence = presenceCondition.toCNF().orElseThrow();
+        BooleanAssignmentList presenceClauses = ComputeBooleanClauseList
+                .toBooleanAssignmentList(cnfPresence)          // 1-arg version builds its own VariableMap
+                .orElseThrow();
 
-        // Merge variable maps so that both clause lists use the same indices
         VariableMap mergedMap = new VariableMap(modelClauses.getVariableMap(), presenceClauses.getVariableMap());
         BooleanAssignmentList remappedModelClauses = modelClauses.remap(mergedMap, false);
         BooleanAssignmentList remappedPresenceClauses = presenceClauses.remap(mergedMap, false);
 
-        // Use ComputeSatisfiableSAT4J directly with the assumed clause list
         return Computations.of(remappedModelClauses)
                 .map(ComputeSatisfiableSAT4J::new)
                 .set(ComputeSatisfiableSAT4J.ASSUMED_CLAUSE_LIST, remappedPresenceClauses)
