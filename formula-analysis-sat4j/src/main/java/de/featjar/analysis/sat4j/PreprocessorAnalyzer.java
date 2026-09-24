@@ -46,6 +46,14 @@ import java.util.stream.Stream;
 
 public class PreprocessorAnalyzer {
 
+    private static final String IF_GROUP = "if";
+    private static final String ELIF_GROUP = "elif";
+    private static final String ELSE_GROUP = "else";
+    private static final String ENDIF_GROUP = "endif";
+    private static final String IF_CONDITION_GROUP = "ifCondition";
+    private static final String ELIF_CONDITION_GROUP = "elifCondition";
+    private static final String START_CONDITION_GROUP = "startCondition";
+
     private final ExpressionParser annotationParser;
 
     private final Pattern annotationPattern;
@@ -69,7 +77,7 @@ public class PreprocessorAnalyzer {
             lineNumber++;
             Matcher matcher = annotationPattern.matcher(line);
             if (matcher.matches()) {
-                if (matcher.group(2) != null) {
+                if (matcher.group(ENDIF_GROUP) != null) {
                     if (expressionStack.isEmpty()) {
                         FeatJAR.log().warning("Line %d: no annotation to end", lineNumber);
                     } else {
@@ -77,7 +85,7 @@ public class PreprocessorAnalyzer {
                         evaluationStack.pop();
                     }
                     return false;
-                } else if (matcher.group(3) != null) {
+                } else if (matcher.group(ELSE_GROUP) != null) {
                     if (expressionStack.isEmpty()) {
                         FeatJAR.log().warning("Line %d: no annotation for else", lineNumber);
                     } else {
@@ -89,7 +97,7 @@ public class PreprocessorAnalyzer {
                         }
                     }
                     return false;
-                } else if (matcher.group(6) != null) {
+                } else if (matcher.group(ELIF_GROUP) != null) {
                     if (expressionStack.isEmpty()) {
                         FeatJAR.log().warning("Line %d: no annotation for elif", lineNumber);
                     } else {
@@ -100,7 +108,7 @@ public class PreprocessorAnalyzer {
                             evaluationStack.push(Boolean.FALSE);
                         }
                     }
-                    Result<IExpression> parse = annotationParser.parse(matcher.group(7));
+                    Result<IExpression> parse = annotationParser.parse(matcher.group(ELIF_CONDITION_GROUP));
                     if (parse.isPresent()) {
                         IExpression annotationExpression = parse.get();
                         expressionStack.push(annotationExpression);
@@ -121,8 +129,8 @@ public class PreprocessorAnalyzer {
                         return true;
                     }
                     return false;
-                } else if (matcher.group(4) != null) {
-                    Result<IExpression> parse = annotationParser.parse(matcher.group(5));
+                } else if (matcher.group(IF_GROUP) != null) {
+                    Result<IExpression> parse = annotationParser.parse(matcher.group(IF_CONDITION_GROUP));
                     if (parse.isPresent()) {
                         IExpression annotationExpression = parse.get();
                         expressionStack.push(annotationExpression);
@@ -162,7 +170,7 @@ public class PreprocessorAnalyzer {
             lineNumber++;
             Matcher matcher = startAnnotationPattern.matcher(line);
             if (matcher.matches()) {
-                Result<IExpression> parse = annotationParser.parse(matcher.group(2));
+                Result<IExpression> parse = annotationParser.parse(matcher.group(IF_CONDITION_GROUP));
                 if (parse.isPresent()) {
                     return parse.get().getVariableStream();
                 } else {
@@ -178,9 +186,14 @@ public class PreprocessorAnalyzer {
         annotationParser = new ExpressionParser();
         annotationParser.setSymbols(symbols);
         String prefix = Pattern.quote(annotationPrefix);
-        annotationPattern = Pattern.compile(prefix + "\\s*((endif\\s*)|(else\\s*)|(if\\s+(.+))|(elif\\s+(.+)))");
+        annotationPattern = Pattern.compile(prefix + "\\s*("
+            + "(?<" + ENDIF_GROUP + ">endif\\s*)|"
+            + "(?<" + ELSE_GROUP + ">else\\s*)|"
+            + "(?<" + IF_GROUP + ">if\\s+(?<" + IF_CONDITION_GROUP + ">.+))|"
+            + "(?<" + ELIF_GROUP + ">elif\\s+(?<" + ELIF_CONDITION_GROUP + ">.+))"
+            + ")");
 
-        startAnnotationPattern = Pattern.compile(prefix + "\\s*(if|elif)\\s+(.+)");
+        startAnnotationPattern = Pattern.compile(prefix + "\\s*(?:if|elif)\\s+(?<" + START_CONDITION_GROUP + ">.+)");
     }
 
     /**
@@ -215,20 +228,20 @@ public class PreprocessorAnalyzer {
                         stack.descendingIterator().forEachRemaining(conjuncts::add);
                         return conjuncts.size() == 1 ? conjuncts.get(0) : new And(conjuncts);
                     }
-                    if (matcher.group(4) != null) {
+                    if (matcher.group(IF_GROUP) != null) {
                         stack.push((IFormula)
-                                annotationParser.parse(matcher.group(5)).orElseThrow());
+                                annotationParser.parse(matcher.group(IF_CONDITION_GROUP)).orElseThrow());
                         elifCounts.push(0);
-                    } else if (matcher.group(3) != null) {
+                    } else if (matcher.group(ELSE_GROUP) != null) {
                         stack.push(new Not(popChecked(stack, line)));
-                    } else if (matcher.group(2) != null) {
+                    } else if (matcher.group(ENDIF_GROUP) != null) {
                         popChecked(stack, line);
                         for (int i = elifCounts.pop(); i > 0; i--) stack.pop();
-                    } else if (matcher.group(6) != null) {
+                    } else if (matcher.group(ELIF_GROUP) != null) {
                         stack.push(new Not(popChecked(stack, line)));
                         elifCounts.push(elifCounts.pop() + 1);
                         stack.push((IFormula)
-                                annotationParser.parse(matcher.group(7)).orElseThrow());
+                                annotationParser.parse(matcher.group(ELIF_CONDITION_GROUP)).orElseThrow());
                     }
                     return (IFormula) False.INSTANCE;
                 })
@@ -290,7 +303,7 @@ public class PreprocessorAnalyzer {
             Matcher matcher = annotationPattern.matcher(lineList.get(i));
 
             if (!matcher.matches()
-                    || matcher.group(2) != null
+                    || matcher.group(ENDIF_GROUP) != null
                     || i + 1 >= presence.size()) {
                 continue;
             }
