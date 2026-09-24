@@ -13,7 +13,7 @@ export class FeatureSearchProvider implements ICommandPaletteActionProvider {
     async getActions(root: Readonly<GModelRoot>, text: string, lastMousePosition?: Point, index?: number): Promise<LabeledAction[]> {
         return findMatchingElements(root, text).map(match => ({
             label: match.label,
-            actions: [SelectAction.create({ selectedElementsIDs: [match.id] }), CenterAction.create([match.id])],
+            actions: [SelectAction.setSelection([match.id]), CenterAction.create([match.id])],
             icon: 'symbol-property'
         }));
     }

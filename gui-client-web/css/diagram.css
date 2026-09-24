@@ -167,3 +167,32 @@
     color: #555;
     min-width: 40px;
 }
+.feature-search-bar-suggestions {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    margin-top: 4px;
+    background: rgb(255, 255, 255);
+    border: 1px solid #888;
+    border-radius: 4px;
+    max-height: 240px;
+    overflow-y: auto;
+    list-style: none;
+    padding: 4px 0;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.feature-search-bar-suggestions.visible {
+    display: block;
+}
+.feature-search-bar-suggestions li {
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.feature-search-bar-suggestions li:hover {
+    background: #9fa2a2;
+}
