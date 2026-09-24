@@ -282,56 +282,31 @@ public class PreprocessorAnalyzer {
 
     /** Returns annotations whose effective condition holds in every valid configuration. */
     public List<String> findSuperfluousAnnotations(Stream<String> lines, Predicate<IFormula> isSatisfiable) {
+        List<String> lineList = lines.toList();
+        List<IFormula> presence = computePresenceConditions(lineList.stream());
         List<String> result = new ArrayList<>();
-        LinkedList<IFormula> stack = new LinkedList<>();
-        LinkedList<Integer> elifCounts = new LinkedList<>();
-        int lineNumber = 0;
-        for (String line : (Iterable<String>) lines.sequential()::iterator) {
-            lineNumber++;
-            Matcher matcher = annotationPattern.matcher(line);
-            if (!matcher.matches()) {
+
+        for (int i = 0; i < lineList.size(); i++) {
+            Matcher matcher = annotationPattern.matcher(lineList.get(i));
+
+            if (!matcher.matches()
+                    || matcher.group(2) != null
+                    || i + 1 >= presence.size()) {
                 continue;
             }
-            if (matcher.group(2) != null) {
-                popChecked(stack, line);
-                for (int i = elifCounts.pop(); i > 0; i--) stack.pop();
-                continue;
+
+            int nextLine = i + 1;
+
+            while (nextLine < presence.size()
+                    && presence.get(nextLine) == False.INSTANCE) {
+                nextLine++;
             }
-            IFormula currentCondition;
-            if (matcher.group(4) != null) {
-                stack.push(parseBooleanCondition(matcher.group(5), lineNumber));
-                elifCounts.push(0);
-            } else if (matcher.group(6) != null) {
-                stack.push(new Not(popChecked(stack, line)));
-                elifCounts.push(elifCounts.pop() + 1);
-                stack.push(parseBooleanCondition(matcher.group(7), lineNumber));
-            } else if (matcher.group(3) != null) {
-                stack.push(new Not(popChecked(stack, line)));
-            } else {
-                throw new IllegalArgumentException("Line " + lineNumber + ": invalid annotation");
+
+            if (nextLine < presence.size()
+                    && !isSatisfiable.test(new Not(presence.get(nextLine)))) {
+                result.add("Line " + (i + 1) + ": " + lineList.get(i));
             }
-            if (stack.isEmpty()) {
-                currentCondition = True.INSTANCE;
-            } else {
-                List<IFormula> conjuncts = new ArrayList<>();
-                stack.descendingIterator().forEachRemaining(conjuncts::add);
-                currentCondition = conjuncts.size() == 1 ? conjuncts.get(0) : new And(conjuncts);
-            }
-            if (!isSatisfiable.test(new Not(currentCondition))) {
-                result.add("Line " + lineNumber + ": " + line);
-            }
-        }
-        if (!stack.isEmpty()) {
-            throw new IllegalArgumentException("Unclosed annotation block");
         }
         return result;
-    }
-
-    private IFormula parseBooleanCondition(String text, int lineNumber) {
-        Result<IExpression> parsed = annotationParser.parse(text);
-        if (parsed.isEmpty() || !(parsed.get() instanceof IFormula)) {
-            throw new IllegalArgumentException("Line " + lineNumber + ": invalid Boolean condition: " + text);
-        }
-        return (IFormula) parsed.get();
     }
 }
