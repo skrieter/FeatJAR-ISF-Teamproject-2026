@@ -454,10 +454,10 @@ public class Preprocessor {
             Matcher matcher = annotationPattern.matcher(line);
 
             if (matcher.matches()) {
-                if (matcher.group(IF_GROUP) != null) { // this line is an #if (check notes.md file for more)
+                if (matcher.group(IF_GROUP) != null) {
                     stack.push(lineNumber);
                     ifLines.add(lineNumber);
-                } else if (matcher.group(ENDIF_GROUP) != null) { // this is an #endif
+                } else if (matcher.group(ENDIF_GROUP) != null) {
                     if (stack.isEmpty()) {
                         String addIfSuggestion = lastEndifLine == 0
                                 ? "add a matching #if before line 1"
@@ -537,7 +537,7 @@ public class Preprocessor {
     }
 
     /**
-     * {@return a problem for each annotation with a syntactically invalid condition, including its line number}
+     * {@return a problem for each line that starts with the annotation prefix but is not a valid annotation, including its line number}
      *
      * @param lines the line stream
      */
