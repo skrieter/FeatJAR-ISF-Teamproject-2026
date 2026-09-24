@@ -1,7 +1,12 @@
 import * as vscode from 'vscode';
-import { ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
+import { ChildProcessWithoutNullStreams } from 'node:child_process';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { spawn } from 'child_process';
+import * as fs from 'node:fs';
+import { join } from 'node:path';
+import { homedir } from 'node:os';
+import { registerSidebar } from './sidebar';
 
 let extensionShell: ChildProcessWithoutNullStreams | undefined;
 let shellOutputBuffer = '';
@@ -10,6 +15,63 @@ const pendingCommands: Array<(output: string) => void> = [];
 
 function featJarPath(): string {
 	return path.join(os.homedir(), '.featjar-bin', 'feat.jar');
+}
+// AI-assisted (isSatisfiable function ): Added a satisfiability check before computing core/dead features
+// to prevent the analysis from running on unsatisfiable models.
+async function isSatisfiable(
+    uri: vscode.Uri
+): Promise<boolean> {
+
+    const result = await executeInExtensionShell(
+        [
+            'solutions-sat4j',
+            '--input',
+            uri.fsPath,
+            '--limit',
+            '1',
+            '--format',
+            'SimpleCSV'
+        ]
+    );
+
+    if (isErrorResult(result)) {
+        return false;
+    }
+
+    return result.split('\n').some(line => line.startsWith('0;'));
+}
+const FEATJAR_DOWNLOAD_URL = 'https://github.com/skrieter/FeatJAR-ISF-Teamproject-2026/releases/download/feat.jar/feat.jar';
+
+export async function featJarDownload(): Promise<void> {
+
+	const featJarDirectory = path.join(os.homedir(), '.featjar-bin');
+	const featJarPath = path.join(featJarDirectory, 'feat.jar');
+	if (!fs.existsSync(featJarPath)) {
+		const choice = await vscode.window.showInformationMessage('FeatJAR is not installed. Would you like to download it?', 'Download', 'Cancel');
+		if (choice === 'Download') {
+			try {
+				await fs.promises.mkdir(featJarDirectory, {recursive: true});
+
+				const response = await fetch(FEATJAR_DOWNLOAD_URL);
+
+				if (!response.ok) {
+					throw new Error(`Download failed with status ${response.status}`);
+				}
+
+				const data = Buffer.from(await response.arrayBuffer());
+				const temporaryPath = `${featJarPath}.download`;
+
+				await fs.promises.writeFile(temporaryPath, data);
+				await fs.promises.rename(temporaryPath, featJarPath);
+
+				vscode.window.showInformationMessage('FeatJAR was installed successfully.');
+			} catch (error) {
+				vscode.window.showErrorMessage(
+					`Could not download FeatJAR: ${error}`
+				);
+			}
+		}
+	}
 }
 
 function startExtensionShell(jarPath: string): Promise<void> {
@@ -66,25 +128,34 @@ function isErrorResult(output: string): boolean {
 	return true;
 }
 
-function openGui(uri: vscode.Uri): void {
-	const process = spawn('java', ['-jar', featJarPath(), 'gui', '--input', uri.fsPath]);
-	process.stdout.on('data', data => {
-		const output = data.toString();
+function openGui(uri: vscode.Uri) {
+	const featjarPath = path.join(os.homedir(),'.featjar-bin','feat.jar');
+	const process = spawn('java',['-jar', featjarPath, 'gui', '--input', uri.fsPath]);
+	process.stdout.on('data', (data) => {
+	const output = data.toString();
 
-		if (output.includes('URL:')) {
-			const url = output.split('URL:')[1].trim();
-			void vscode.commands.executeCommand('simpleBrowser.show', url);
-		}
+	if (output.includes('URL:')) {
+		const parts = output.split('URL:');
+		const url = parts[1].trim();
+
+		vscode.commands.executeCommand(
+			'simpleBrowser.show',
+			url
+		);
+	}
 	});
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
+	await featJarDownload();
 	await startExtensionShell(featJarPath());
-
+	registerSidebar(context);
+	const output = vscode.window.createOutputChannel('FeatJAR');
+	context.subscriptions.push(output);
 	const checkSatisfiability = vscode.commands.registerCommand(
 		'featjar-extension.checkSatisfiability',
 		async (uri: vscode.Uri) => {
-			const output = await executeInExtensionShell([
+			const result = await executeInExtensionShell([
 				'solutions-sat4j',
 				'--input',
 				uri.fsPath,
@@ -94,17 +165,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 				'SimpleCSV',
 			]);
 
-			if (isErrorResult(output)) {
+			if (isErrorResult(result)) {
 				return;
 			}
 
-			const satisfiable = output
+			const satisfiable = result
 				.split('\n')
 				.some(line => line.startsWith('0;'));
-			void vscode.window.showInformationMessage(
-				satisfiable ? 'The model is satisfiable.' : 'The model is not satisfiable.',
-				{ modal: true },
-			);
+			output.clear();
+			output.appendLine(satisfiable ? 'The model is satisfiable.' : 'The model is not satisfiable.');
+			output.show();
 		},
 	);
 
@@ -117,16 +187,85 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 			vscode.window.showInformationMessage('Test command executed successfully!');
 		});
 
-	const uvlEditorProvider = vscode.window.registerCustomEditorProvider(
-		'featjar-extension.uvlEditor',
-		{
-			resolveCustomTextEditor(document: vscode.TextDocument) {
-				openGui(document.uri);
-			},
-		},
-	);
+	const uvlEditorProvider = vscode.window.registerCustomEditorProvider('featjar-extension.uvlEditor',
+	{
+		resolveCustomTextEditor(
+			document: vscode.TextDocument,
+			webviewPanel: vscode.WebviewPanel
+		) {
+			openGui(document.uri);
+		}
+	});
+	const modelTest = vscode.commands.registerCommand(
+        'featjar-extension.modelTest',
+        async (uri: vscode.Uri) => {
+       	const result = await executeInExtensionShell(['print-model-stats', '--input', uri.fsPath]);
+			if (isErrorResult(result)) {
+				return;
+			}
 
-context.subscriptions.push(checkSatisfiability, openFeatJarGui, uvlEditorProvider, testCommand);
+			console.log(result);
+			output.clear();
+			//vscode.window.showInformationMessage(`the stats : ${result}`);
+			output.appendLine(`the stats : ${result.trim()}`);
+			output.show();
+        }
+    );
+	const countConfigurations = vscode.commands.registerCommand(
+    'featjar-extension.countConfigurations',
+    async (uri: vscode.Uri) => {
+        const result = await executeInExtensionShell(['count-sat4j', '--input', uri.fsPath]);
+		if (isErrorResult(result)) {
+			return;
+		}
+
+		console.log(result);
+		output.clear();
+		output.appendLine(`Number of configurations: ${result.trim()}`);
+		output.show();
+    });
+	const coreDeadFeatures = vscode.commands.registerCommand(
+        'featjar-extension.coreDeadFeatures',
+        async (uri: vscode.Uri | undefined) => {
+			// The implementation here is with Ai assisted 
+            if (!uri) {
+                vscode.window.showWarningMessage('Select a UVL file in the FeatJAR sidebar.');
+                return;
+            }            
+
+			const satisfiable = await isSatisfiable(uri);
+
+			if (!satisfiable) {
+    			output.appendLine('Core/Dead analysis not possible: model is not satisfiable.');
+    			output.show();
+    			return;
+			}
+            const result = await executeInExtensionShell([
+                'core-sat4j', '--input', uri.fsPath, '--output-format', 'LiteralList'
+            ]);
+            if (isErrorResult(result)) {
+                return;
+            }
+
+            // LiteralList separates signed feature names with commas and assignments with newlines.
+            const literals = result.split(/\r?\n/)
+                .map(line => line.trim())
+                .filter(line => line && !/^\[.*?\] \[(INFO|DEBUG|WARN|ERROR)\]/.test(line))
+                .flatMap(line => line.split(','))
+                .map(value => value.trim());
+            if (literals.length === 0 || literals.some(value => !/^[+-].+/.test(value))) {
+                throw new Error('FeatJAR returned no valid core/dead literal list. Check whether the model is satisfiable.');
+            }
+            const core = literals.filter(value => value.startsWith('+')).length;
+            const dead = literals.filter(value => value.startsWith('-')).length;
+            output.clear();
+			output.appendLine(`Core Features: ${core} | Dead Features: ${dead}`);
+			output.show();
+        }
+    );
+	
+
+context.subscriptions.push(checkSatisfiability, openFeatJarGui, uvlEditorProvider, testCommand,);
 }
 
 export function deactivate(): void {

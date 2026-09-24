@@ -71,7 +71,7 @@ public final class ExtensionShell {
         final ByteArrayOutputStream commandBytes = new ByteArrayOutputStream();
         final PrintStream commandOutput = new PrintStream(commandBytes, true, StandardCharsets.UTF_8);
         final FeatJAR.Configuration configuration = FeatJAR.shellConfiguration();
-        configuration.logConfig.resetLogStreams().logToStream(commandOutput, "extension-shell", Verbosity.values());
+        configuration.logConfig.resetLogStreams().logToStream(commandOutput, "extension-shell", Verbosity.MESSAGE);
 
         try (BufferedReader input = new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8));
                 FeatJAR ignored = FeatJAR.initialize(configuration)) {

@@ -32,19 +32,19 @@ satisfiable.
 
 1. Open a terminal in this folder:
 
-   ```text
+   ```bash
    cd featjar-feature-model-tools
    ```
 
 2. Install the dependencies:
 
-   ```text
+   ```bash
    npm install
    ```
 
 3. Compile the extension:
 
-   ```text
+   ```bash
    npm run compile
    ```
 
