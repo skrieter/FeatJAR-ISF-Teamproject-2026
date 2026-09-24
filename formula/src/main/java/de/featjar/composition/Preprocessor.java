@@ -50,7 +50,10 @@ import java.util.stream.Stream;
 public class Preprocessor {
 
     private final ExpressionParser annotationParser;
-
+     // this will return the symbols used to parse annotation conditions}
+    public Symbols getSymbols() {
+        return annotationParser.getSymbols();
+    }
     private final Pattern annotationPattern;
     private final Pattern startAnnotationPattern;
 
