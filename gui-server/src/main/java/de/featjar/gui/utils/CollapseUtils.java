@@ -1,4 +1,4 @@
-// AI-generated
+// Generated with Claude Opus 5.5 (Anthropic, via claude.ai)
 package de.featjar.gui.utils;
 
 import java.util.HashSet;
