@@ -145,7 +145,7 @@ export class FeatureNodeView extends RectangularNodeView {
 
                 {showOptionalMarker && <circle cx={width / 2} cy={0} r={5} fill='white' stroke='black' stroke-width={1.5} />}
                 {cardinalityText && (
-                    <text x={width - 4} y={14} text-anchor='end' class-feature-cardinality-text={true}>
+                    <text x={width - 4} y={-6} text-anchor='end' class-feature-cardinality-text={true}>
                         {cardinalityText}
                     </text>
                 )}
