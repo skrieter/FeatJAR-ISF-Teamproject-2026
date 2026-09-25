@@ -149,18 +149,34 @@ function isErrorResult(output: string): boolean {
 function openGui(uri: vscode.Uri) {
 	const featjarPath = path.join(os.homedir(),'.featjar-bin','feat.jar');
 	const process = spawn('java',['-jar', featjarPath, 'gui', '--input', uri.fsPath]);
-	process.stdout.on('data', (data) => {
-	const output = data.toString();
+	process.stdout.on('data', async (data) => {
+		const output = data.toString();
 
-	if (output.includes('URL:')) {
-		const parts = output.split('URL:');
-		const url = parts[1].trim();
+		if (output.includes('URL:')) {
+			const parts = output.split('URL:');
+			const url = parts[1].trim();
 
-		vscode.commands.executeCommand(
-			'simpleBrowser.show',
-			url
-		);
-	}
+			const htmlUri = vscode.Uri.parse(url);
+			const htmlPath = htmlUri.fsPath;
+			const htmlFolder = path.dirname(htmlPath);
+
+			const choice = await vscode.window.showWarningMessage(
+				`The FeatJAR GUI folder needs to be trusted: ${htmlFolder}`,
+				'Trust Folder'
+			);
+
+			if (choice !== 'Trust Folder') {
+				return;
+			}
+
+			await vscode.env.clipboard.writeText(htmlFolder);
+
+			vscode.window.showInformationMessage(
+				`Add this folder to Trusted Folders & Workspaces: ${htmlFolder}`
+			);
+
+			await vscode.commands.executeCommand('workbench.trust.manage');
+		}
 	});
 }
 
