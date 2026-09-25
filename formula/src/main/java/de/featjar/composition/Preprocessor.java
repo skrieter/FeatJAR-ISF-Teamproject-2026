@@ -54,6 +54,12 @@ import java.util.stream.Stream;
 
 public class Preprocessor {
 
+    public static enum Inclusion {
+        ALWAYS,
+        SOMETIMES,
+        NEVER
+    }
+
     private final ExpressionParser annotationParser;
 
     private final Pattern annotationPattern;
@@ -321,6 +327,22 @@ public class Preprocessor {
                     }
                     return (IFormula) False.INSTANCE;
                 })
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * {@return for each line, in order, whether it is always, sometimes, or never part of a variant of the given partial variable assignment}
+     * Annotation lines are never part of a variant.
+     *
+     * @param lines the line stream
+     * @param assignment the partial variable assignment
+     */
+    public List<Inclusion> computeInclusions(Stream<String> lines, Assignment assignment) {
+        return computePresenceConditions(lines).stream()
+                .map(condition -> condition
+                        .evaluate(assignment)
+                        .map(value -> Boolean.TRUE.equals(value) ? Inclusion.ALWAYS : Inclusion.NEVER)
+                        .orElse(Inclusion.SOMETIMES))
                 .collect(Collectors.toList());
     }
 

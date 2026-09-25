@@ -46,6 +46,7 @@ import java.nio.file.StandardOpenOption;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 public class PreprocessorCommand extends ACommand {
@@ -57,7 +58,8 @@ public class PreprocessorCommand extends ACommand {
         CHECK_STRUCTURE,
         FIND_UNKNOWN_FEATURES,
         PRINT_PRESENCE_CONDITIONS,
-        PARTIAL_PROCESS
+        PARTIAL_PROCESS,
+        PRINT_INCLUSIONS
     }
 
     public static enum MissingVariables {
@@ -114,6 +116,10 @@ public class PreprocessorCommand extends ACommand {
                     break;
                 case PARTIAL_PROCESS:
                     stream = preprocessPartially(
+                            in, optionParser.getResult(CONFIGURATION_OPTION).orElseThrow(), charset, preprocessor);
+                    break;
+                case PRINT_INCLUSIONS:
+                    stream = printInclusions(
                             in, optionParser.getResult(CONFIGURATION_OPTION).orElseThrow(), charset, preprocessor);
                     break;
                 case PRINT_VARIABLES:
@@ -216,6 +222,20 @@ public class PreprocessorCommand extends ACommand {
             return Stream.empty();
         }
         return preprocessor.preprocessPartially(Files.lines(in, charset), parsedAssignment.get());
+    }
+
+    private Stream<String> printInclusions(Path in, Path assignmentPath, Charset charset, Preprocessor preprocessor)
+            throws IOException {
+        Result<Assignment> parsedAssignment = IO.load(assignmentPath, new CPPAssignmentFormat());
+        if (parsedAssignment.isEmpty()) {
+            FeatJAR.log().problems(parsedAssignment);
+            return Stream.empty();
+        }
+        List<String> lines = Files.readAllLines(in, charset);
+        List<Preprocessor.Inclusion> inclusions =
+                preprocessor.computeInclusions(lines.stream(), parsedAssignment.get());
+        return IntStream.range(0, lines.size())
+                .mapToObj(i -> String.format("%-9s %s", inclusions.get(i), lines.get(i)));
     }
 
     private Assignment addMissingVariablesToAssignment(
