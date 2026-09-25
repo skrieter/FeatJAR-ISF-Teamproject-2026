@@ -42,13 +42,14 @@ export class FeatureNodeView extends RectangularNodeView {
         // Feature cardinality (e.g. "2..5"), only shown for features that can be
         // chosen more than once — mandatory/optional are already conveyed by the
         // circle markers below, so repeating "1..1"/"0..1" there would be redundant.
-        const lowerBound = typeof (node as GNodeWithArgs).args?.lowerBound === 'number'
-            ? ((node as GNodeWithArgs).args!.lowerBound as number)  : undefined;
-        const upperBound = typeof (node as GNodeWithArgs).args?.upperBound === 'number'
-            ? ((node as GNodeWithArgs).args!.upperBound as number): undefined;
+        const lowerBound =
+            typeof (node as GNodeWithArgs).args?.lowerBound === 'number' ? ((node as GNodeWithArgs).args!.lowerBound as number) : undefined;
+        const upperBound =
+            typeof (node as GNodeWithArgs).args?.upperBound === 'number' ? ((node as GNodeWithArgs).args!.upperBound as number) : undefined;
         const cardinalityText =
             isMultiple && lowerBound !== undefined && upperBound !== undefined
-            ? `${lowerBound}..${upperBound === -1 ? '*' : upperBound}`: undefined;   
+                ? `${lowerBound}..${upperBound === -1 ? '*' : upperBound}`
+                : undefined;
         const showMandatoryMarker = isMandatory && this.hasIncomingEdgeOfType(node, 'edge-mandatory');
         const showOptionalMarker = isOptional && this.hasIncomingEdgeOfType(node, 'edge-optional');
 

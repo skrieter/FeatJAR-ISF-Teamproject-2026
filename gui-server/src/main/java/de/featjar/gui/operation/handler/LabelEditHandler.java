@@ -19,10 +19,14 @@
  * See <https://github.com/FeatureIDE> for further information.
  */
 package de.featjar.gui.operation.handler;
+
+import com.google.inject.Inject;
+import de.featjar.base.FeatJAR;
 import de.featjar.base.data.Result;
 import de.featjar.formula.structure.IFormula;
-import com.google.inject.Inject;
+import de.featjar.gui.utils.FeatureModelLabelEditValidator;
 import de.featjar.gui.utils.IdentifiableResolver;
+import featJAR.Constraint;
 import featJAR.FeatJARPackage;
 import featJAR.Identifiable;
 import java.util.Optional;
@@ -31,9 +35,7 @@ import org.eclipse.emf.edit.command.SetCommand;
 import org.eclipse.glsp.server.emf.EMFModelState;
 import org.eclipse.glsp.server.features.directediting.ApplyLabelEditOperation;
 import org.eclipse.glsp.server.operations.GModelOperationHandler;
-import de.featjar.base.FeatJAR;
-import de.featjar.gui.utils.FeatureModelLabelEditValidator;
-import featJAR.Constraint;
+
 /**
  * The handler edits a label of underlying semantic element.
  *
@@ -54,9 +56,9 @@ public class LabelEditHandler extends GModelOperationHandler<ApplyLabelEditOpera
                 labelId.endsWith("_label") ? labelId.substring(0, labelId.length() - "_label".length()) : labelId;
         Identifiable element = resolver.findById(semanticId).orElseThrow();
 
-          // The text the user typed in the edit box
+        // The text the user typed in the edit box
         String newText = operation.getText();
-               
+
         // a constraint is stored as text  so check that text before it is saved into the model
         // The validator already checks while the user types and this check makes sure a bad text can
         // never get in even if that first check was skipped.
@@ -70,7 +72,7 @@ public class LabelEditHandler extends GModelOperationHandler<ApplyLabelEditOpera
                 return Optional.empty();
             }
         }
- // Feature names and valid constraints are applied as before
+        // Feature names and valid constraints are applied as before
 
         return Optional.of(SetCommand.create(
                 ((EMFModelState) modelState).getEditingDomain(),

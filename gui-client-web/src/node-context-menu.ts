@@ -28,7 +28,7 @@ export function initializeNodeContextMenu(actionDispatcher: IActionDispatcher): 
         console.log('contextmenu fired on', event.target);
         const nodeElement = (event.target as Element).closest('[data-svg-metadata-type="node"]');
         event.preventDefault();
-// if we didn't click on a node, we're on empty canvas:that's where "Add Constraint" should show up
+        // if we didn't click on a node, we're on empty canvas:that's where "Add Constraint" should show up
         if (!nodeElement) {
             const addEntries: Entry[] = [
                 {
@@ -65,7 +65,7 @@ function buildEntries(id: string, css: string, actionDispatcher: IActionDispatch
             { label: 'OR', action: SetNodeTypeAction.create(id, 'node-or') },
             { label: 'XOR', action: SetNodeTypeAction.create(id, 'node-xor') },
             { label: 'AND', action: SetNodeTypeAction.create(id, 'node-and') },
-            { label: 'Set Bounds', action: () => promptForBounds(id, true) }
+            { label: 'Set Bounds', action: () => promptForBounds(id, css, true) }
         ];
 
         return entries;
@@ -75,10 +75,10 @@ function buildEntries(id: string, css: string, actionDispatcher: IActionDispatch
         entries = [
             { label: 'Make Abstract', action: SetFeatureImplementationTypeAction.create(id, 'abstract') },
             { label: 'Make Concrete', action: SetFeatureImplementationTypeAction.create(id, 'concrete') },
-            { label: 'Make Mandatory', action: SetCardinalityFeatureBoundsAction.create(id, 1, 1) },
-            { label: 'Make Optional', action: SetCardinalityFeatureBoundsAction.create(id, 0, 1) },
+            { label: 'Make Mandatory', action: () => setFeatureBounds(id, css, 1, 1) },
+            { label: 'Make Optional', action: () => setFeatureBounds(id, css, 0, 1) },
             // { label: 'Make Hidden', action: SetFeatureImplementationTypeAction.create(id, 'hidden') }
-            { label: 'Set Bounds', action: () => promptForBounds(id, false) },
+            { label: 'Set Bounds', action: () => promptForBounds(id, css, false) },
             // New: Creates a new optional feature as a child of the right-clicked
             // New: brings in the "add feature below" logic implemented in create-feature-actions.ts.
             { label: 'New Feature', action: () => addFeatureBelow(id, actionDispatcher) }
@@ -86,8 +86,8 @@ function buildEntries(id: string, css: string, actionDispatcher: IActionDispatch
 
         return entries;
     }
-     // added for #27 - right click on an existing constraint now gives a Delete option.
-    if (css.includes('constraint-node')){
+    // added for #27 - right click on an existing constraint now gives a Delete option.
+    if (css.includes('constraint-node')) {
         entries = [{ label: 'Delete', action: DeleteElementOperation.create([id]) }];
     }
 
@@ -96,20 +96,20 @@ function buildEntries(id: string, css: string, actionDispatcher: IActionDispatch
 
 /**
  * Asks the user for a lower and upper bound. Returns undefined when the user
- * cancels or enters something invalid. An Upper bound of -1 means unbounded.
+ * cancels or enters something invalid. An Upper bound of -1 or * means unbounded.
  */
-function promptForBounds(elementId: string, groupFlag: boolean): Action | undefined {
+function promptForBounds(elementId: string, css: string, groupFlag: boolean): Action | undefined {
     const lowerInput = window.prompt('Lower bound:', '0');
     if (lowerInput === null) {
         return undefined;
     }
-    const upperInput = window.prompt('Upper bound (-1 = unbounded):', '1');
+    const upperInput = window.prompt('Upper bound (* or -1 = unbounded):', '1');
     if (upperInput === null) {
         return undefined;
     }
 
     const lower = Number.parseInt(lowerInput, 10);
-    const upper = Number.parseInt(upperInput, 10);
+    const upper = upperInput.trim() === '*' ? -1 : Number.parseInt(upperInput, 10);
 
     if (Number.isNaN(lower) || Number.isNaN(upper)) {
         return undefined;
@@ -117,11 +117,72 @@ function promptForBounds(elementId: string, groupFlag: boolean): Action | undefi
     if (lower < 0 || (upper !== -1 && upper < lower)) {
         return undefined;
     }
-
     if (groupFlag) {
         return SetCardinalityGroupNodeBoundsAction.create(elementId, lower, upper);
     }
+    return setFeatureBounds(elementId, css, lower, upper);
+}
+
+/**
+ * Returns the feature type for the given bounds.
+ * Same rules as CardinalityType.java on the server.
+ */
+function typeFromBounds(lower: number, upper: number): string {
+    if (lower === 0 && upper === 1) {
+        return 'optional';
+    }
+    if (lower === 1 && upper === 1) {
+        return 'mandatory';
+    }
+    return 'multiple';
+}
+
+/**
+ * Reads the current feature type from the CSS classes of the node.
+ */
+function currentFeatureType(css: string): string | undefined {
+    const classes = css.split(/\s+/);
+    if (classes.includes('feature-mandatory')) {
+        return 'mandatory';
+    }
+    if (classes.includes('feature-optional')) {
+        return 'optional';
+    }
+    if (classes.includes('feature-multiple')) {
+        return 'multiple';
+    }
+    return undefined;
+}
+
+/**
+ * Creates the action for new feature bounds and shows a popup when
+ * the feature already has this type or when its type changes.
+ */
+function setFeatureBounds(elementId: string, css: string, lower: number, upper: number): Action | undefined {
+    const oldType = currentFeatureType(css);
+    const newType = typeFromBounds(lower, upper);
+    const boundsText = `${lower}..${upper === -1 ? '*' : upper}`;
+
+    if (oldType === newType && newType === 'mandatory') {
+        showMessage('This feature is already mandatory.');
+        return undefined;
+    }
+    if (oldType === newType && newType === 'optional') {
+        showMessage('This feature is already optional.');
+        return undefined;
+    }
+    if (oldType !== undefined && oldType !== newType) {
+        showMessage(`The feature type changed from ${oldType} to ${newType} (${boundsText}).`);
+    }
+
     return SetCardinalityFeatureBoundsAction.create(elementId, lower, upper);
+}
+
+/**
+ * Shows a popup after the current action has been sent.
+ */
+function showMessage(message: string): void {
+    setTimeout(() => window.alert(message), 0);
 }
 
 /**
