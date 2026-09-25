@@ -23,7 +23,6 @@ package de.featjar.analysis.sat4j;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import de.featjar.AnalysisTest;
-import de.featjar.analysis.sat4j.cli.PreprocessorAnalyzerCommand;
 import de.featjar.formula.io.textual.JavaSymbols;
 import java.util.List;
 import java.util.stream.Stream;
@@ -123,8 +122,6 @@ public class DeadCodeTest extends AnalysisTest {
 
     private static List<String> dead(String... lines) {
         return new PreprocessorAnalyzer("//#", JavaSymbols.INSTANCE)
-                .findDeadCode(
-                    Stream.of(lines),
-                    PreprocessorAnalyzerCommand.consistentWith(loadFormula("GPL/model.xml")));
+                .findDeadCode(Stream.of(lines), loadFormula("GPL/model.xml"));
     }
 }

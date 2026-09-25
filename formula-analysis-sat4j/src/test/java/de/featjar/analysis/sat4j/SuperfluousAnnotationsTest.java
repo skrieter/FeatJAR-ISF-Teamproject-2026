@@ -3,7 +3,6 @@ package de.featjar.analysis.sat4j;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import de.featjar.AnalysisTest;
-import de.featjar.analysis.sat4j.cli.PreprocessorAnalyzerCommand;
 import de.featjar.formula.io.textual.JavaSymbols;
 import de.featjar.formula.structure.connective.And;
 import de.featjar.formula.structure.predicate.Literal;
@@ -27,8 +26,7 @@ public class SuperfluousAnnotationsTest extends AnalysisTest {
                 "optional",
                 "//#endif");
 
-        List<String> found = analyzer.findSuperfluousAnnotations(
-                lines.stream(), PreprocessorAnalyzerCommand.consistentWith(loadFormula("GPL/model.xml")));
+        List<String> found = analyzer.findSuperfluousAnnotations(lines.stream(), loadFormula("GPL/model.xml"));
 
         assertEquals(Arrays.asList("Line 1: //#if A || !A", "Line 4: //#if Base"), found);
     }
@@ -54,8 +52,7 @@ public class SuperfluousAnnotationsTest extends AnalysisTest {
                 "//#endif",
                 "//#endif");
 
-        List<String> found = analyzer.findSuperfluousAnnotations(
-                lines.stream(), PreprocessorAnalyzerCommand.consistentWith(loadFormula("GPL/model.xml")));
+        List<String> found = analyzer.findSuperfluousAnnotations(lines.stream(), loadFormula("GPL/model.xml"));
 
         assertEquals(Arrays.asList(), found);
     }
@@ -77,12 +74,9 @@ public class SuperfluousAnnotationsTest extends AnalysisTest {
                 "//#endif",
                 "//#endif");
 
-        List<String> found = analyzer.findSuperfluousAnnotations(
-                lines.stream(),
-                PreprocessorAnalyzerCommand.consistentWith(
-                        new And(new Literal("A"), new Literal(false, "B"))));
+        List<String> found =
+                analyzer.findSuperfluousAnnotations(lines.stream(), new And(new Literal("A"), new Literal(false, "B")));
 
         assertEquals(Arrays.asList("Line 3: //#elif !B", "Line 8: //#else", "Line 9: //#if A"), found);
     }
-
 }
