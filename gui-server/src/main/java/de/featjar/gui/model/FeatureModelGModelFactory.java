@@ -29,6 +29,7 @@ import de.featjar.gui.types.FeatureModelLables;
 import de.featjar.gui.types.GroupNodeType;
 import de.featjar.gui.utils.AttributeKeysUtils;
 import de.featjar.gui.utils.CardinalityUtils;
+import de.featjar.gui.utils.CollapseUtils;
 import featJAR.Cardinality;
 import featJAR.Constraint;
 import featJAR.Feature;
@@ -124,13 +125,34 @@ public class FeatureModelGModelFactory extends EMFNotationGModelFactory {
 
         TreeNode currentNode = new TreeNode(gNode.getId());
 
-        for (GroupNode child : feature.getGroupNodeList()) {
-            NodeSubtreeResult gChild = constructGroupNodeSubtree(child);
-            currentNode.addChild(gChild.treeNode);
-            createEdge(feature, child, gNode, gChild.gNode);
+        boolean hasChildren = !feature.getGroupNodeList().isEmpty();
+        if (hasChildren) {
+            gNode.getCssClasses().add(CollapseUtils.CSS_COLLAPSIBLE);
+        }
+        if (hasChildren && CollapseUtils.isCollapsed(modelState, gNode.getId())) {
+            gNode.getCssClasses().add(CollapseUtils.CSS_COLLAPSED);
+            gNode.getArgs().put(CollapseUtils.ARG_COLLAPSED_COUNT, countVisibleDescendants(feature));
+        } else {
+            for (GroupNode child : feature.getGroupNodeList()) {
+                NodeSubtreeResult gChild = constructGroupNodeSubtree(child);
+                currentNode.addChild(gChild.treeNode);
+                createEdge(feature, child, gNode, gChild.gNode);
+            }
         }
         gNodes.add(gNode);
         return new NodeSubtreeResult(gNode, currentNode);
+    }
+
+    private int countVisibleDescendants(Feature feature) {
+        int count = 0;
+        for (GroupNode groupNode : feature.getGroupNodeList()) {
+            for (Feature child : groupNode.getFeatureList()) {
+                if (!AttributeKeysUtils.isHidden(child)) {
+                    count += 1 + countVisibleDescendants(child);
+                }
+            }
+        }
+        return count;
     }
 
     /**

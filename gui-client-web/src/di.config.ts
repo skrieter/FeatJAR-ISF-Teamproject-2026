@@ -44,7 +44,6 @@ import { getParameters } from './url-parameters';
 import { SessionManagementPanel } from './session-management-panel';
 import { FeatureSearchProvider } from './feature-search-provider';
 
-
 import '../css/diagram.css';
 import '../css/command-palette.css';
 
