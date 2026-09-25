@@ -22,17 +22,18 @@ package de.featjar.gui.utils;
 
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
-import featJAR.Identifiable;
-import java.util.Optional;
-import org.eclipse.emf.ecore.EObject;
-import org.eclipse.glsp.server.emf.notation.EMFNotationModelState;
+import de.featjar.base.data.Problem;
+import de.featjar.base.data.Result;
 import featJAR.Feature;
 import featJAR.FeatureModel;
 import featJAR.GroupNode;
+import featJAR.Identifiable;
 import java.util.HashSet;
+import java.util.Optional;
 import java.util.Set;
-import de.featjar.base.data.Problem;
-import de.featjar.base.data.Result;
+import org.eclipse.emf.ecore.EObject;
+import org.eclipse.glsp.server.emf.notation.EMFNotationModelState;
+
 /**
  * Resolves GModel IDs to their semantic elements.
  * This is possible because the {@link FeatureModelIdGenerator} uses
@@ -58,9 +59,11 @@ public class IdentifiableResolver {
             return Result.empty(new Problem("No element ID given"));
         }
         EObject found = modelState.getSemanticModel().eResource().getEObject(id);
-        return found instanceof Identifiable identifiable ? Result.of(identifiable) : Result.empty(new Problem("No element found for ID: " + id));
+        return found instanceof Identifiable identifiable
+                ? Result.of(identifiable)
+                : Result.empty(new Problem("No element found for ID: " + id));
     }
-        /**
+    /**
      * Collects the names of all features from the semantic model.
      *
      *to check the references of a constraint:

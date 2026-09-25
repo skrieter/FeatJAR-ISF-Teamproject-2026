@@ -46,7 +46,6 @@ import { SessionManagementPanel } from './session-management-panel';
 import { FeatureSearchProvider } from './feature-search-provider';
 import { ImmediateNodeCreationTool } from './immediate-node-creation-tool';
 
-
 import '../css/diagram.css';
 import '../css/command-palette.css';
 
