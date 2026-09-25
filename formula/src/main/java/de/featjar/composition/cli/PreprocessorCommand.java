@@ -67,6 +67,22 @@ public class PreprocessorCommand extends ACommand {
         FALSE
     }
 
+    public static enum AnnotationStyle {
+        CPP(Preprocessor.Style.CPP),
+        ANTENNA(Preprocessor.Style.ANTENNA),
+        MUNGE(Preprocessor.Style.MUNGE);
+
+        private final Preprocessor.Style style;
+
+        private AnnotationStyle(Preprocessor.Style style) {
+            this.style = style;
+        }
+
+        public Preprocessor.Style getStyle() {
+            return style;
+        }
+    }
+
     public static final Option<Path> CONFIGURATION_OPTION = Options.newOption("configuration", Options.PathParser)
             .setDescription("Path to configuration file")
             .setValidator(Options.PathValidator);
@@ -84,18 +100,27 @@ public class PreprocessorCommand extends ACommand {
             .setDefaultArgument(MissingVariables.IGNORE.name())
             .setDescription("How to deal with variables in the processed file that do not appear in the given config");
 
+    public static final Option<AnnotationStyle> STYLE_OPTION = Options.newEnumOption(
+                    "annotation-style", AnnotationStyle.class)
+            .setDefaultArgument(AnnotationStyle.CPP.name())
+            .setDescription("The syntax of the annotations (CPP: #if A, ANTENNA: //#if A, MUNGE: /*if[A]*/)");
+
     public static final Option<String> PREFIX_OPTION = Options.newOption("annotation-prefix", Options.StringParser)
-            .setDefaultArgument("#")
-            .setDescription("The prefix that precedes each annotation");
+            .setDescription("The prefix that precedes each annotation (overrides the prefix of the annotation style)");
 
     @Override
     public int run(OptionList optionParser) {
         Path in = optionParser.getResult(INPUT_OPTION).orElseThrow();
         Path out = optionParser.getResult(OUTPUT_OPTION).orElse(null);
         Charset charset = StandardCharsets.UTF_8;
-        String annotationPrefix = optionParser.getResult(PREFIX_OPTION).orElseThrow();
+        Preprocessor.Style style =
+                optionParser.getResult(STYLE_OPTION).orElseThrow().getStyle();
+        Result<String> annotationPrefix = optionParser.getResult(PREFIX_OPTION);
+        if (annotationPrefix.isPresent()) {
+            style = style.withPrefix(annotationPrefix.get());
+        }
 
-        Preprocessor preprocessor = new Preprocessor(annotationPrefix, JavaSymbols.INSTANCE);
+        Preprocessor preprocessor = new Preprocessor(style);
 
         Mode mode = optionParser.getResult(MODE_OPTION).orElseThrow();
 
