@@ -54,13 +54,16 @@ import org.eclipse.glsp.graph.util.GConstants;
 import org.eclipse.glsp.graph.util.GraphUtil;
 import org.eclipse.glsp.server.emf.model.notation.Diagram;
 import org.eclipse.glsp.server.emf.notation.EMFNotationGModelFactory;
+import de.featjar.gui.operation.handler.ToggleShowAttributesHandler;
+import featJAR.Attributes;
 
 /**
  * Builds the graphical model from the semantic feature model.
  *
  * Creates the structure for nodes, edges, labels and their CSS classes.
  * Positions and final sizes are left out, since the
- * client calculates the labels afterwards and {@link FeatureModelLayoutEngine} assigns
+ * client calculates the labels afterwards and {@link FeatureModelLayoutEngine}
+ * assigns
  * the positions once the calculations are available.
  */
 public class FeatureModelGModelFactory extends EMFNotationGModelFactory {
@@ -104,12 +107,13 @@ public class FeatureModelGModelFactory extends EMFNotationGModelFactory {
     }
 
     /**
-     * Constructs the {@link Feature} subtree at top children level which only contains {@link GNode}s.
+     * Constructs the {@link Feature} subtree at top children level which only
+     * contains {@link GNode}s.
      * Calls {@link FeatureModelGModelFactory#constructGroupNodeSubtree(GroupNode)}
      * to construct the respective subtree for its {@link GroupNode}s.
      *
      * @param feature the current {@link Feature}
-     * @param isRoot the root feature get another CSS label
+     * @param isRoot  the root feature get another CSS label
      * @return the {@link NodeSubtreeResult}
      */
     private NodeSubtreeResult constructFeatureSubtree(Feature feature, boolean isRoot) {
@@ -156,8 +160,10 @@ public class FeatureModelGModelFactory extends EMFNotationGModelFactory {
     }
 
     /**
-     * Constructs the {@link Feature} subtree at top children level which only contains {@link GNode}s.
-     * Calls {@link FeatureModelGModelFactory#constructFeatureSubtree(Feature, boolean))}
+     * Constructs the {@link Feature} subtree at top children level which only
+     * contains {@link GNode}s.
+     * Calls {@link FeatureModelGModelFactory#constructFeatureSubtree(Feature,
+     * boolean))}
      * to construct the respective subtree for its {@link Feature}s.
      *
      * @param groupNode the current {@link GroupNode}
@@ -183,10 +189,11 @@ public class FeatureModelGModelFactory extends EMFNotationGModelFactory {
     }
 
     /**
-     * Creates the graphical representations for {@link Feature} and {@link GroupNode}.
+     * Creates the graphical representations for {@link Feature} and
+     * {@link GroupNode}.
      *
      * @param identifiable the model element
-     * @param cssType the corresponding CSS class
+     * @param cssType      the corresponding CSS class
      * @return the created {@link GNode}
      */
     private GNode createNode(final Identifiable identifiable, final String cssType) {
@@ -214,6 +221,20 @@ public class FeatureModelGModelFactory extends EMFNotationGModelFactory {
             nodeBuilder.addArgument("lowerBound", feature.getCardinality().getLowerBound());
             nodeBuilder.addArgument("upperBound", feature.getCardinality().getUpperBound());
             AttributeKeysUtils.getColor(feature).ifPresent(color -> nodeBuilder.addArgument("color", color));
+            /**
+             * When "Show attributes" is on, adds one label per attribute
+             * under the feature's name, using the feature's own displayable attributes.
+             */
+            if (modelState
+                    .getProperty(ToggleShowAttributesHandler.SHOW_ATTRIBUTES_PROPERTY, Boolean.class)
+                    .orElse(false)) {
+                for (Attributes attribute : AttributeKeysUtils.getDisplayableAttributes(feature)) {
+                    nodeBuilder.add(new GLabelBuilder(FeatureModelLables.ATTRIBUTE_LABEL)
+                            .text(attribute.getKey() + ": " + attribute.getValue())
+                            .id(feature.getId() + "_attr_" + attribute.getKey())
+                            .build());
+                }
+            }
         } else if (identifiable instanceof GroupNode groupNode) {
 
             int w = cssType.equals(GroupNodeType.AND_NODE.value())
@@ -259,10 +280,10 @@ public class FeatureModelGModelFactory extends EMFNotationGModelFactory {
      * Creates the graphical representation for an edge with a
      * suitable {@link EdgeType} between to nodes.
      *
-     * @param parent the EMF source
-     * @param child the EMF target
+     * @param parent  the EMF source
+     * @param child   the EMF target
      * @param gParent the {@link GNode} of the parent
-     * @param gChild the {@link GNode} of the source
+     * @param gChild  the {@link GNode} of the source
      */
     private void createEdge(
             final Identifiable parent, final Identifiable child, final GNode gParent, final GNode gChild) {
@@ -371,7 +392,7 @@ public class FeatureModelGModelFactory extends EMFNotationGModelFactory {
     }
 
     /*
-     *	Creates a selectable node for a constraint, containing its text as a label
+     * Creates a selectable node for a constraint, containing its text as a label
      */
     public GNode createConstraintNode(final Constraint constraint, int legendWidth) {
         String gId = constraint.getId();
