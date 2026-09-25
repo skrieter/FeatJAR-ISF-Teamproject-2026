@@ -54,17 +54,32 @@ public class PreprocessorCommand extends ACommand {
         PROCESS,
         PRINT_VARIABLES,
         PRINT_ANNOTATIONS,
-        PRINT_PRESENCE_CONDITIONS,
-        CHECK_SYNTAX
         CHECK_STRUCTURE,
         FIND_UNKNOWN_FEATURES,
-        PRINT_PRESENCE_CONDITIONS
+        PRINT_PRESENCE_CONDITIONS,
+        CHECK_SYNTAX
     }
 
     public static enum MissingVariables {
         IGNORE,
         TRUE,
         FALSE
+    }
+
+    public static enum AnnotationStyle {
+        CPP(Preprocessor.Style.CPP),
+        ANTENNA(Preprocessor.Style.ANTENNA),
+        MUNGE(Preprocessor.Style.MUNGE);
+
+        private final Preprocessor.Style style;
+
+        private AnnotationStyle(Preprocessor.Style style) {
+            this.style = style;
+        }
+
+        public Preprocessor.Style getStyle() {
+            return style;
+        }
     }
 
     public static final Option<Path> CONFIGURATION_OPTION = Options.newOption("configuration", Options.PathParser)
@@ -84,18 +99,27 @@ public class PreprocessorCommand extends ACommand {
             .setDefaultArgument(MissingVariables.IGNORE.name())
             .setDescription("How to deal with variables in the processed file that do not appear in the given config");
 
+    public static final Option<AnnotationStyle> STYLE_OPTION = Options.newEnumOption(
+                    "annotation-style", AnnotationStyle.class)
+            .setDefaultArgument(AnnotationStyle.CPP.name())
+            .setDescription("The syntax of the annotations (CPP: #if A, ANTENNA: //#if A, MUNGE: /*if[A]*/)");
+
     public static final Option<String> PREFIX_OPTION = Options.newOption("annotation-prefix", Options.StringParser)
-            .setDefaultArgument("#")
-            .setDescription("The prefix that precedes each annotation");
+            .setDescription("The prefix that precedes each annotation (overrides the prefix of the annotation style)");
 
     @Override
     public int run(OptionList optionParser) {
         Path in = optionParser.getResult(INPUT_OPTION).orElseThrow();
         Path out = optionParser.getResult(OUTPUT_OPTION).orElse(null);
         Charset charset = StandardCharsets.UTF_8;
-        String annotationPrefix = optionParser.getResult(PREFIX_OPTION).orElseThrow();
+        Preprocessor.Style style =
+                optionParser.getResult(STYLE_OPTION).orElseThrow().getStyle();
+        Result<String> annotationPrefix = optionParser.getResult(PREFIX_OPTION);
+        if (annotationPrefix.isPresent()) {
+            style = style.withPrefix(annotationPrefix.get());
+        }
 
-        Preprocessor preprocessor = new Preprocessor(annotationPrefix, JavaSymbols.INSTANCE);
+        Preprocessor preprocessor = new Preprocessor(style);
 
         Mode mode = optionParser.getResult(MODE_OPTION).orElseThrow();
 
@@ -124,6 +148,7 @@ public class PreprocessorCommand extends ACommand {
                     break;
                 case CHECK_SYNTAX:
                     stream = detectInvalidSyntax(in, charset, preprocessor);
+                    break;
                 case FIND_UNKNOWN_FEATURES:
                     stream = findUnknownFeatures(
                             in, optionParser.getResult(FEATURE_MODEL_OPTION).orElseThrow(), charset, preprocessor);
@@ -238,6 +263,8 @@ public class PreprocessorCommand extends ACommand {
 
         return preprocessor.checkSyntax(Files.lines(in, charset)).stream()
                 .map(problem -> String.format("Line %d: %s", problem.getLineNumber(), problem.getMessage()));
+    }
+
     private Stream<String> findUnknownFeatures(
             Path in, Path featureModelPath, Charset charset, Preprocessor preprocessor) throws IOException {
         Result<IFormula> featureModel = IO.load(featureModelPath, FormulaFormats.getInstance());
