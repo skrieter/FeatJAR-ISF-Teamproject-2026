@@ -105,6 +105,7 @@ export default function createContainer(options: IDiagramOptions): Container {
     // Cardinality labels
     configureModelElement(ctx, 'label-edge-cardinality', GLabel, GLabelView);
     configureModelElement(ctx, 'label-node-cardinality', GLabel, GLabelView);
+    configureModelElement(ctx, 'label-attribute', GLabel, GLabelView);
 
     bindOrRebind(container, TYPES.ILogger).to(ConsoleLogger).inSingletonScope();
     bindOrRebind(container, TYPES.LogLevel).toConstantValue(LogLevel.warn);
