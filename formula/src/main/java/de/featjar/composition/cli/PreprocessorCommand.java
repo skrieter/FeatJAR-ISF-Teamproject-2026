@@ -54,10 +54,11 @@ public class PreprocessorCommand extends ACommand {
         PROCESS,
         PRINT_VARIABLES,
         PRINT_ANNOTATIONS,
+        CHECK_SYNTAX,
         CHECK_STRUCTURE,
         FIND_UNKNOWN_FEATURES,
         PRINT_PRESENCE_CONDITIONS,
-        CHECK_SYNTAX
+        PARTIAL_PROCESS
     }
 
     public static enum MissingVariables {
@@ -136,6 +137,10 @@ public class PreprocessorCommand extends ACommand {
                             optionParser.getResult(MISSING_VARIABLES_OPTION).orElseThrow(),
                             charset,
                             preprocessor);
+                    break;
+                case PARTIAL_PROCESS:
+                    stream = preprocessPartially(
+                            in, optionParser.getResult(CONFIGURATION_OPTION).orElseThrow(), charset, preprocessor);
                     break;
                 case PRINT_VARIABLES:
                     stream = printVariableNames(in, charset, preprocessor);
@@ -232,6 +237,16 @@ public class PreprocessorCommand extends ACommand {
         return preprocessor.preprocess(Files.lines(in, charset), assignment);
     }
 
+    private Stream<String> preprocessPartially(Path in, Path assignmentPath, Charset charset, Preprocessor preprocessor)
+            throws IOException {
+        Result<Assignment> parsedAssignment = IO.load(assignmentPath, new CPPAssignmentFormat());
+        if (parsedAssignment.isEmpty()) {
+            FeatJAR.log().problems(parsedAssignment);
+            return Stream.empty();
+        }
+        return preprocessor.preprocessPartially(Files.lines(in, charset), parsedAssignment.get());
+    }
+
     private Assignment addMissingVariablesToAssignment(
             Assignment orgAssignment, List<String> extractVariableNames, Object value) throws IOException {
         LinkedHashMap<String, Object> variableValuePairs = new LinkedHashMap<>(orgAssignment.getAll());
@@ -260,7 +275,6 @@ public class PreprocessorCommand extends ACommand {
     }
 
     private Stream<String> detectInvalidSyntax(Path in, Charset charset, Preprocessor preprocessor) throws IOException {
-
         return preprocessor.checkSyntax(Files.lines(in, charset)).stream()
                 .map(problem -> String.format("Line %d: %s", problem.getLineNumber(), problem.getMessage()));
     }

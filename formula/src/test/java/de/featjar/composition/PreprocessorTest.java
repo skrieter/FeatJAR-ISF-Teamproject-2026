@@ -392,6 +392,132 @@ public class PreprocessorTest extends Common {
                 unknownFeatures("//#if A", "a();", "//#endif", "//#if !A", "b();", "//#endif"));
     }
 
+    @Test
+    public void partialConfigurationReducesUndecidedAnnotations() {
+        assertEquals(
+                List.of("//#if B", "a();", "//#endif", "c();"),
+                preprocess(
+                        new Assignment("A", true),
+                        "//#if A && B",
+                        "a();",
+                        "//#endif",
+                        "//#if !A",
+                        "b();",
+                        "//#else",
+                        "c();",
+                        "//#endif"));
+    }
+
+    @Test
+    public void partialConfigurationRewritesElifChains() {
+        assertEquals(
+                List.of("//#if B", "b();", "//#else", "c();", "//#endif"),
+                preprocess(
+                        new Assignment("A", false, "C", true),
+                        "//#if A",
+                        "a();",
+                        "//#elif B",
+                        "b();",
+                        "//#elif C || D",
+                        "c();",
+                        "//#else",
+                        "d();",
+                        "//#endif"));
+    }
+
+    @Test
+    public void partialConfigurationKeepsNestedUndecidedAnnotations() {
+        assertEquals(
+                List.of("//#if B", "//#if !C", "a();", "//#endif", "//#endif"),
+                preprocess(
+                        new Assignment("A", true),
+                        "//#if A",
+                        "//#if B",
+                        "//#if !C",
+                        "a();",
+                        "//#endif",
+                        "//#endif",
+                        "//#endif",
+                        "//#if !A",
+                        "b();",
+                        "//#endif"));
+    }
+
+    @Test
+    public void partialConfigurationSimplifiesNestedAnnotationsWithTheirContext() {
+        assertEquals(
+                List.of("//#if A", "//#if B", "a();", "//#endif", "//#else", "c();", "//#endif"),
+                preprocess(
+                        new Assignment(),
+                        "//#if A",
+                        "//#if A && B",
+                        "a();",
+                        "//#endif",
+                        "//#if !A",
+                        "b();",
+                        "//#endif",
+                        "//#elif !A",
+                        "c();",
+                        "//#endif"));
+    }
+
+    @Test
+    public void partialConfigurationRemovesAnnotationsImpliedByTheirContext() {
+        assertEquals(
+                List.of("//#if A || B", "a();", "//#if C", "c();", "//#endif", "//#endif"),
+                preprocess(
+                        new Assignment(),
+                        "//#if A || B",
+                        "//#if A || B",
+                        "a();",
+                        "//#endif",
+                        "//#if !(A || B) || C",
+                        "c();",
+                        "//#endif",
+                        "//#elif A || B",
+                        "b();",
+                        "//#endif"));
+    }
+
+    @Test
+    public void partialConfigurationKeepsUnparsableAnnotations() {
+        assertEquals(
+                List.of("//#if a > 0", "a();", "//#else", "b();", "//#endif"),
+                preprocess(
+                        new Assignment("a", 1, "A", false),
+                        "//#if A",
+                        "x();",
+                        "//#elif a > 0",
+                        "a();",
+                        "//#else",
+                        "b();",
+                        "//#endif"));
+    }
+
+    @Test
+    public void completeConfigurationRemovesAllAnnotations() {
+        assertEquals(
+                List.of("b();"),
+                preprocess(new Assignment("A", false, "B", true), "//#if A", "a();", "//#elif B", "b();", "//#endif"));
+    }
+
+    @Test
+    public void completeConfigurationKeepsLinesAfterElifBlock() {
+        assertEquals(
+                List.of("a();", "c();"),
+                new Preprocessor("//#", JavaSymbols.INSTANCE)
+                        .preprocess(
+                                Stream.of("//#if A", "a();", "//#elif B", "b();", "//#endif", "c();"),
+                                new Assignment("A", true, "B", false))
+                        .collect(Collectors.toList()));
+    }
+
+    private static List<String> preprocess(Assignment assignment, String... lines) {
+        return new Preprocessor("//#", JavaSymbols.INSTANCE)
+                .preprocessPartially(Stream.of(lines), assignment)
+                .collect(Collectors.toList());
+    }
+
     private static List<String> unknownFeatures(String... lines) {
         return new Preprocessor("//#", JavaSymbols.INSTANCE)
                 .findUnknownFeatures(Stream.of(lines), loadFormula("GPL/model.xml")).stream()
