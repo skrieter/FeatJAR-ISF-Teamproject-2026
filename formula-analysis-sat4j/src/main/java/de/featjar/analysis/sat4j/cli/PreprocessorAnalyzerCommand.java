@@ -242,7 +242,7 @@ public class PreprocessorAnalyzerCommand extends ACommand {
             Path in, Charset charset, PreprocessorAnalyzer preprocessor, OptionList optionParser) throws IOException {
         Path featureModelPath = optionParser.getResult(FEATURE_MODEL_OPTION).orElseThrow();
         IFormula featureModel = IO.load(featureModelPath, FormulaFormats.getInstance()).orElseThrow();
-        return preprocessor.findDeadCode(Files.lines(in, charset), consistentWith(featureModel))
+        return preprocessor.findDeadCode(Files.lines(in, charset), featureModel)
                 .stream();
     }
 
@@ -251,7 +251,7 @@ public class PreprocessorAnalyzerCommand extends ACommand {
         Path featureModelPath = optionParser.getResult(FEATURE_MODEL_OPTION).orElseThrow();
         IFormula featureModel = IO.load(featureModelPath, FormulaFormats.getInstance()).orElseThrow();
         try (Stream<String> lines = Files.lines(in, charset)) {
-            return preprocessor.findSuperfluousAnnotations(lines, consistentWith(featureModel))
+            return preprocessor.findSuperfluousAnnotations(lines, featureModel)
                     .stream();
         }
     }
