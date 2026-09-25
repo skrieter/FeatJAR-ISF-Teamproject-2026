@@ -48,7 +48,7 @@ javadoc {
 
 test {
     useJUnitPlatform()
-    ignoreFailures = true
+    ignoreFailures = false
 }
 
 publishing {
