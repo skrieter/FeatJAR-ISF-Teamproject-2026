@@ -36,6 +36,7 @@ import de.featjar.formula.structure.predicate.False;
 import de.featjar.formula.structure.predicate.True;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
 import java.util.stream.Stream;
 
 public class PreprocessorAnalyzer extends Preprocessor {
@@ -52,21 +53,26 @@ public class PreprocessorAnalyzer extends Preprocessor {
      * @param featureModel the feature model
      */
     public List<String> findDeadCode(Stream<String> lines, IFormula featureModel) {
-        List<IFormula> presence = computePresenceConditions(lines);
+        List<String> lineList = lines.toList();
+        List<IFormula> presence = computePresenceConditions(lineList.stream());
         ExpressionSerializer serializer = new ExpressionSerializer();
         serializer.setSymbols(getSymbols());
         List<String> dead = new ArrayList<>();
 
-        // Compute the CNF of the feature model once (ComputeNNFFORMULA deals with the reference)
+        // Compute the CNF of the feature model once (ComputeNNFFormula deals with the reference)
         BooleanAssignmentList modelClauses = Computations.of(featureModel)
                 .map(ComputeNNFFormula::new)
                 .map(ComputeCNFFormula::new)
                 .map(ComputeBooleanClauseList::new)
                 .compute();
 
-        // a code block is a maximal run of lines between annotations, which have the presence condition False
+        // A code block is a maximal run of lines between annotations. Annotations are
+        // identified with the shared pattern and the named annotation groups so that
+        // the intent is explicit and does not depend on the internal representation of
+        // computePresenceConditions.
         for (int start = 0, i = 0; i <= presence.size(); i++) {
-            if (i == presence.size() || presence.get(i) == False.INSTANCE) {
+            boolean atAnnotation = i == presence.size() || isAnnotation(lineList.get(i));
+            if (atAnnotation) {
                 if (start < i) {
                     IFormula presenceCondition = presence.get(start);
                     if (!isSatisfiable(modelClauses, presenceCondition)) {
@@ -84,11 +90,33 @@ public class PreprocessorAnalyzer extends Preprocessor {
     }
 
     /**
+     * {@return whether the given line is a presence annotation such as {@code #if},
+     * {@code #elif}, {@code #else}, or {@code #endif}}
+     *
+     * Uses the compiled annotation pattern and the named annotation groups of
+     * {@link Preprocessor} instead of relying on the internal representation of the
+     * presence conditions for annotation lines.
+     */
+    private boolean isAnnotation(String line) {
+        Matcher matcher = annotationPattern.matcher(line);
+        if (!matcher.matches()) {
+            return false;
+        }
+        return matcher.group(IF_GROUP) != null
+                || matcher.group(ELIF_GROUP) != null
+                || matcher.group(ELSE_GROUP) != null
+                || matcher.group(ENDIF_GROUP) != null;
+    }
+
+    /**
      * {@return whether the given presence condition is satisfiable together with the model}
      *
      * Uses {@link ComputeSatisfiableSAT4J} with the model's clause list as the base
      * and the presence condition's clause list as an assumed clause list.
-     * This avoids recomputing the CNF of the model for every block.
+     * The presence condition's clause list is converted using the model's
+     * {@link VariableMap} so that both clause lists share the same variable indices.
+     * This avoids recomputing the CNF of the model for every block and eliminates
+     * the need for remapping.
      */
     private static boolean isSatisfiable(BooleanAssignmentList modelClauses, IFormula presenceCondition) {
         if (presenceCondition == True.INSTANCE) {
@@ -99,17 +127,13 @@ public class PreprocessorAnalyzer extends Preprocessor {
         }
 
         IFormula cnfPresence = presenceCondition.toCNF().orElseThrow();
-        BooleanAssignmentList presenceClauses = ComputeBooleanClauseList
-                .toBooleanAssignmentList(cnfPresence)          // 1-arg version builds its own VariableMap
+        BooleanAssignmentList presenceClauses = ComputeBooleanClauseList.toBooleanAssignmentList(
+                        cnfPresence, modelClauses.getVariableMap())
                 .orElseThrow();
 
-        VariableMap mergedMap = new VariableMap(modelClauses.getVariableMap(), presenceClauses.getVariableMap());
-        BooleanAssignmentList remappedModelClauses = modelClauses.remap(mergedMap, false);
-        BooleanAssignmentList remappedPresenceClauses = presenceClauses.remap(mergedMap, false);
-
-        return Computations.of(remappedModelClauses)
+        return Computations.of(modelClauses)
                 .map(ComputeSatisfiableSAT4J::new)
-                .set(ComputeSatisfiableSAT4J.ASSUMED_CLAUSE_LIST, remappedPresenceClauses)
+                .set(ComputeSatisfiableSAT4J.ASSUMED_CLAUSE_LIST, presenceClauses)
                 .compute();
     }
 }

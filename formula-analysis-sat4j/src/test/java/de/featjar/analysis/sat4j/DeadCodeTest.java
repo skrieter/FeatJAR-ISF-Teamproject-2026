@@ -35,7 +35,9 @@ public class DeadCodeTest extends AnalysisTest {
 
     @Test
     public void contradictionIsDead() {
-        assertEquals(List.of("Dead code at lines 2-2: A && !A"), dead("//#if A && !A", "a();", "//#endif"));
+        assertEquals(
+                List.of("Dead code at lines 2-2: Directed && !Directed"),
+                dead("//#if Directed && !Directed", "a();", "//#endif"));
     }
 
     @Test
@@ -69,7 +71,53 @@ public class DeadCodeTest extends AnalysisTest {
     public void satisfiableBlocksAreNotDead() {
         assertEquals(
                 List.of(),
-                dead("x();", "//#if BFS || DFS", "a();", "//#elif !Base", "//#endif", "//#if A", "b();", "//#endif"));
+                dead(
+                        "x();",
+                        "//#if BFS || DFS",
+                        "a();",
+                        "//#elif !Base",
+                        "//#endif",
+                        "//#if Directed",
+                        "b();",
+                        "//#endif"));
+    }
+
+    // ------------------------------------------------------------------
+    // Additional tests using features from the GPL model
+    // ------------------------------------------------------------------
+
+    @Test
+    public void weightedAndUnweightedTogetherAreDead() {
+        assertEquals(
+                List.of("Dead code at lines 2-2: Weighted && Unweighted"),
+                dead("//#if Weighted && Unweighted", "a();", "//#endif"));
+    }
+
+    @Test
+    public void bfsAndDfsTogetherAreDead() {
+        assertEquals(List.of("Dead code at lines 2-2: BFS && DFS"), dead("//#if BFS && DFS", "a();", "//#endif"));
+    }
+
+    @Test
+    public void mstPrimAndMstKruskalTogetherAreDead() {
+        assertEquals(
+                List.of("Dead code at lines 2-2: MSTPrim && MSTKruskal"),
+                dead("//#if MSTPrim && MSTKruskal", "a();", "//#endif"));
+    }
+
+    @Test
+    public void stronglyConnectedWithUndirectedIsDead() {
+        // StrongC -> Directed, and Directed/Undirected are alternatives.
+        assertEquals(
+                List.of("Dead code at lines 2-2: StronglyConnected && Undirected"),
+                dead("//#if StronglyConnected && Undirected", "a();", "//#endif"));
+    }
+
+    @Test
+    public void multipleDeadBlocksAreAllReported() {
+        assertEquals(
+                List.of("Dead code at lines 2-2: Weighted && Unweighted", "Dead code at lines 5-5: BFS && DFS"),
+                dead("//#if Weighted && Unweighted", "a();", "//#endif", "//#if BFS && DFS", "b();", "//#endif"));
     }
 
     private static List<String> dead(String... lines) {
