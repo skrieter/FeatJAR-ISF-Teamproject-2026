@@ -7,6 +7,7 @@ import {
 } from './set-type-actions';
 
 import { addFeatureBelow } from './create-feature-actions'; // added
+import { ToggleCollapseAction } from './toggle-collapse-action';
 
 interface Entry {
     label: string;
@@ -67,6 +68,12 @@ function buildEntries(id: string, css: string, actionDispatcher: IActionDispatch
             { label: 'AND', action: SetNodeTypeAction.create(id, 'node-and') },
             { label: 'Set Bounds', action: () => promptForBounds(id, css, true) }
         ];
+        const classes = css.split(/\s+/);
+        if (classes.includes('collapsed')) {
+            entries.push({ label: 'Expand Subtree', action: ToggleCollapseAction.create(id) });
+        } else if (classes.includes('collapsible')) {
+            entries.push({ label: 'Collapse Subtree', action: ToggleCollapseAction.create(id) });
+        }
 
         return entries;
     }
@@ -83,6 +90,12 @@ function buildEntries(id: string, css: string, actionDispatcher: IActionDispatch
             // New: brings in the "add feature below" logic implemented in create-feature-actions.ts.
             { label: 'New Feature', action: () => addFeatureBelow(id, actionDispatcher) }
         ];
+        const classes = css.split(/\s+/);
+        if (classes.includes('collapsed')) {
+            entries.push({ label: 'Expand Subtree', action: ToggleCollapseAction.create(id) });
+        } else if (classes.includes('collapsible')) {
+            entries.push({ label: 'Collapse Subtree', action: ToggleCollapseAction.create(id) });
+        }
 
         return entries;
     }
