@@ -24,6 +24,7 @@ import de.featjar.gui.action.handler.ClientMessageHandler;
 import de.featjar.gui.action.handler.ExitHandler;
 import de.featjar.gui.action.handler.SaveHandler;
 import de.featjar.gui.action.handler.SelectionHandler;
+import de.featjar.gui.action.handler.ToggleCollapseHandler;
 import de.featjar.gui.model.FeatureModelGModelFactory;
 import de.featjar.gui.model.FeatureModelLayoutEngine;
 import de.featjar.gui.model.FeatureModelSourceModelStorage;
@@ -56,6 +57,7 @@ import org.eclipse.glsp.server.features.directediting.LabelEditValidator;
 import org.eclipse.glsp.server.features.toolpalette.ToolPaletteItemProvider;
 import org.eclipse.glsp.server.layout.LayoutEngine;
 import org.eclipse.glsp.server.operations.OperationHandler;
+import de.featjar.gui.operation.handler.ToggleShowAttributesHandler;
 
 /**
  * Determines which classes (bindings) are used.
@@ -104,6 +106,7 @@ public class FeatureModelDiagramModule extends EMFNotationDiagramModule {
         bindings.add(ClientMessageHandler.class);
         bindings.add(ExitHandler.class);
         bindings.add(SaveHandler.class);
+        bindings.add(ToggleCollapseHandler.class);
     }
 
     @Override
@@ -125,6 +128,7 @@ public class FeatureModelDiagramModule extends EMFNotationDiagramModule {
         binding.add(SetFeatureImplementationHandler.class);
         binding.add(SetFeatureColorHandler.class);
         binding.add(SetGroupNodeTypeHandler.class);
+        binding.add(ToggleShowAttributesHandler.class);
 
         binding.add(SetCardinalityGroupNodeBoundsHandler.class);
         binding.add(SetCardinalityFeatureBoundsHandler.class);

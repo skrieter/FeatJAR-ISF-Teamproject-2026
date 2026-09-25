@@ -72,6 +72,11 @@
     fill: black;
 }
 
+.sprotty .label-attribute {
+    font-size: 11px;
+    fill: #555;
+}
+
 /* Multiple feature cardinality size */
 .sprotty .label-edge-cardinality {
     font-size: 14px;
@@ -132,6 +137,15 @@
     opacity: 0.4;
       pointer-events: none;
  }
+
+.session-management-panel-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+    cursor: pointer;
+    user-select: none;
+}
 
 .feature-color-toolbar-button:hover {
     background: #e8e8e8;

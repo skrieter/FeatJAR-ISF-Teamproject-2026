@@ -34,7 +34,8 @@ import {
     GLabel,
     GLabelView,
     editLabelFeature,
-    contextMenuModule
+    contextMenuModule,
+    NodeCreationTool 
 } from '@eclipse-glsp/client';
 import { Container } from 'inversify';
 import { makeLoggerMiddleware } from 'inversify-logger-middleware';
@@ -108,10 +109,14 @@ export default function createContainer(options: IDiagramOptions): Container {
     // Cardinality labels
     configureModelElement(ctx, 'label-edge-cardinality', GLabel, GLabelView);
     configureModelElement(ctx, 'label-node-cardinality', GLabel, GLabelView);
+    configureModelElement(ctx, 'label-attribute', GLabel, GLabelView);
 
     bindOrRebind(container, TYPES.ILogger).to(ConsoleLogger).inSingletonScope();
     bindOrRebind(container, TYPES.LogLevel).toConstantValue(LogLevel.warn);
     container.bind(TYPES.IMarqueeBehavior).toConstantValue({ entireEdge: true, entireElement: true });
+    // Palette buttons (Add Feature, Add Node, Add Constraint, ...) create the element right away
+    // instead of waiting for a placement click that the server ignores anyway (issue #23).
+    bindOrRebind(container, NodeCreationTool).to(ImmediateNodeCreationTool).inSingletonScope();
 
     if (parameters.inversifyLog) {
         configureInversifyLogger(container);
