@@ -65,19 +65,20 @@ public class PreprocessorCommand extends ACommand {
         FALSE
     }
 
-    public static final Option<Path> CONFIGURATION_OPTION =
-            Options.newOption("configuration", Options.ExistingPathParser).setDescription("Path to configuration file");
+    public static final Option<Path> CONFIGURATION_OPTION = Options
+            .newOption("configuration", Options.ExistingPathParser).setDescription("Path to configuration file");
 
-    public static final Option<Path> FEATURE_MODEL_OPTION = Options.newOption("feature-model", Options.PathParser)
-            .setDescription("Path to feature model file")
-            .setValidator(Options.PathValidator);
+    public static final Option<Path> FEATURE_MODEL_OPTION = Options
+            .newOption("feature-model", Options.ExistingPathParser)
+            .setDescription("Path to feature model file");
+    // .setValidator(Options.PathValidator);
 
     public static final Option<Mode> MODE_OPTION = Options.newEnumOption("mode", Mode.class)
             .setDefaultArgument(Mode.PROCESS.name())
             .setDescription("Mode of operation");
 
     public static final Option<MissingVariables> MISSING_VARIABLES_OPTION = Options.newEnumOption(
-                    "missing-variables", MissingVariables.class)
+            "missing-variables", MissingVariables.class)
             .setDefaultArgument(MissingVariables.IGNORE.name())
             .setDescription("How to deal with variables in the processed file that do not appear in the given config");
 
