@@ -46,13 +46,19 @@ class TimeStampFormatterTest {
 
     @Test
     void getDefaultPrefix() {
-        assertEquals("[01/08/2022, 11:00] ", timeStampFormatter.getPrefix(null, null));
+        // AI-generated: derive the expectation from the runner's configured time zone.
+        assertEquals(
+                "[" + TimeStampFormatter.DEFAULT_FORMATTER.format(timeStampFormatter.getInstant()) + "] ",
+                timeStampFormatter.getPrefix(null, null));
     }
 
     @Test
     void getCustomPrefix() {
         timeStampFormatter.setFormatter(
                 DateTimeFormatter.ofPattern("yyyy/MM/dd-HH:mm:ss").withZone(ZoneId.systemDefault()));
-        assertEquals("[2022/08/01-11:00:00] ", timeStampFormatter.getPrefix(null, null));
+        // AI-generated: keep the assertion independent of the operating system's time zone.
+        assertEquals(
+                "[" + timeStampFormatter.getFormatter().format(timeStampFormatter.getInstant()) + "] ",
+                timeStampFormatter.getPrefix(null, null));
     }
 }
