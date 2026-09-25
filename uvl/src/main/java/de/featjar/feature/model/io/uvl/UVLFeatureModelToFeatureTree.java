@@ -181,7 +181,10 @@ public class UVLFeatureModelToFeatureTree {
             Object uvlAttributeValue = Objects.requireNonNull(entry.getValue().getValue());
 
             de.featjar.base.data.Attribute<? extends Object> attribute;
-            if (FeatureModelAttributes.ABSTRACT.getSimpleName().equals(uvlAttributeName)) {
+            // AI-generated: keep the pseudo-root marker intact instead of interpreting its underscore as a namespace.
+            if (UVLFormulaFormat.PSEUDO_ROOT_ATTRIBUTE.getSimpleName().equals(uvlAttributeName)) {
+                attribute = UVLFormulaFormat.PSEUDO_ROOT_ATTRIBUTE;
+            } else if (FeatureModelAttributes.ABSTRACT.getSimpleName().equals(uvlAttributeName)) {
                 attribute = FeatureModelAttributes.ABSTRACT;
             } else if (FeatureModelAttributes.HIDDEN.getSimpleName().equals(uvlAttributeName)) {
                 attribute = FeatureModelAttributes.HIDDEN;

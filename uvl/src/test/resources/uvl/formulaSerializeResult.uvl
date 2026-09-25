@@ -1,5 +1,5 @@
 features
-        "__formula__" {de_featjar_base_data_pseudo__root true}
+        "__formula__" {pseudo_root true}
                 optional
                         Test1
                         Test2

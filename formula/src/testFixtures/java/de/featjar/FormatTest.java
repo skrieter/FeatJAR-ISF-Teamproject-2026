@@ -76,6 +76,17 @@ public class FormatTest {
     }
 
     public static <T> void testParseAndSerialize(String name, IFormat<T> format) {
+        testParseAndSerialize(name, format, false);
+    }
+
+    /**
+     * Tests parsing and serialization while treating CRLF and LF as equivalent.
+     */
+    public static <T> void testParseAndSerializeIgnoringLineEndings(String name, IFormat<T> format) {
+        testParseAndSerialize(name, format, true);
+    }
+
+    private static <T> void testParseAndSerialize(String name, IFormat<T> format, boolean ignoreLineEndings) {
         assertEquals(format.getClass().getCanonicalName(), format.getIdentifier());
         assertTrue(format.supportsParse());
         assertTrue(format.supportsWrite());
@@ -91,10 +102,20 @@ public class FormatTest {
         // serialize
         final byte[] serializeOutput = serialize(obj, format);
 
-        assertArrayEquals(
-                parseInput,
-                serializeOutput,
-                () -> new String(parseInput) + "\n==========\n" + new String(serializeOutput));
+        if (ignoreLineEndings) {
+            // AI-generated: text fixtures use CRLF while serialization uses LF on CI runners.
+            assertEquals(normalizeLineEndings(new String(parseInput, StandardCharsets.UTF_8)),
+                    normalizeLineEndings(new String(serializeOutput, StandardCharsets.UTF_8)));
+        } else {
+            assertArrayEquals(
+                    parseInput,
+                    serializeOutput,
+                    () -> new String(parseInput) + "\n==========\n" + new String(serializeOutput));
+        }
+    }
+
+    private static String normalizeLineEndings(String text) {
+        return text.replace("\r\n", "\n");
     }
 
     private static <T> byte[] serialize(T object, IFormat<T> format) {

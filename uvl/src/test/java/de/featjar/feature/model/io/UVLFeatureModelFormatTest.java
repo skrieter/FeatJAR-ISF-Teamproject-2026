@@ -108,10 +108,10 @@ public class UVLFeatureModelFormatTest {
 
     @Test
     void testFixtures() {
-        FormatTest.testParseAndSerialize("uvl/ABC-nAnBnC", new UVLFeatureModelFormat());
-        FormatTest.testParseAndSerialize("uvl/nA", new UVLFeatureModelFormat());
-        FormatTest.testParseAndSerialize("uvl/nAB", new UVLFeatureModelFormat());
-        FormatTest.testParseAndSerialize("uvl/fm_with_attributes", new UVLFeatureModelFormat());
+        FormatTest.testParseAndSerializeIgnoringLineEndings("uvl/ABC-nAnBnC", new UVLFeatureModelFormat());
+        FormatTest.testParseAndSerializeIgnoringLineEndings("uvl/nA", new UVLFeatureModelFormat());
+        FormatTest.testParseAndSerializeIgnoringLineEndings("uvl/nAB", new UVLFeatureModelFormat());
+        FormatTest.testParseAndSerializeIgnoringLineEndings("uvl/fm_with_attributes", new UVLFeatureModelFormat());
     }
 
     @Test
@@ -125,7 +125,12 @@ public class UVLFeatureModelFormatTest {
 
         String expected = new String(
                 Files.readAllBytes(Path.of("src", "test", "resources", "uvl", "featureModelSerializeResult.uvl")));
-        Assertions.assertEquals(expected, featureModelString.get());
+        // AI-generated: fixture line endings differ between Windows checkouts and Linux CI runners.
+        Assertions.assertEquals(normalizeLineEndings(expected), normalizeLineEndings(featureModelString.get()));
+    }
+
+    private static String normalizeLineEndings(String text) {
+        return text.replace("\r\n", "\n");
     }
 
     @Test

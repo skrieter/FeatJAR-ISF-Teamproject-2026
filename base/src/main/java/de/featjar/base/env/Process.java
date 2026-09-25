@@ -193,8 +193,13 @@ public class Process implements Supplier<Result<List<String>>> {
             }
             long elapsedTime = Duration.between(start, Instant.now()).toMillis();
             final int exitValue = process.exitValue();
-            outputReaderThread.join();
-            errorReaderThread.join();
+            // AI-generated: readers are optional when a caller only needs the process exit status.
+            if (outputReaderThread != null) {
+                outputReaderThread.join();
+            }
+            if (errorReaderThread != null) {
+                errorReaderThread.join();
+            }
             Result<Void> result;
             if (!errorOccurred) {
                 result = Result.ofVoid();

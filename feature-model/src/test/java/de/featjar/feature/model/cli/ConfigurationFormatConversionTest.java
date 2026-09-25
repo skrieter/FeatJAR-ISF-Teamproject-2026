@@ -21,10 +21,18 @@
 package de.featjar.feature.model.cli;
 
 import de.featjar.base.FeatJAR;
+import de.featjar.base.data.Result;
+import de.featjar.base.io.IO;
+import de.featjar.base.io.format.IFormat;
+import de.featjar.formula.assignment.BooleanAssignmentGroups;
+import de.featjar.formula.io.binary.BooleanAssignmentGroupsGroupedBinaryFormat;
+import de.featjar.formula.io.binary.BooleanAssignmentGroupsSimpleBinaryFormat;
+import de.featjar.formula.io.csv.BooleanAssignmentGroupsCSVFormat;
+import de.featjar.formula.io.csv.BooleanAssignmentGroupsGroupedCSVFormat;
+import de.featjar.formula.io.dimacs.BooleanAssignmentGroupsDimacsFormat;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Objects;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -95,8 +103,36 @@ public class ConfigurationFormatConversionTest {
                 "--output",
                 tempFile.toString());
         Assertions.assertEquals(0, exitCode);
-        byte[] expected = Files.readAllBytes(Path.of("src/test/resources/de/featjar/feature/configuration/" + output));
-        byte[] actual = Files.readAllBytes(tempFile);
-        Assertions.assertTrue(Objects.deepEquals(expected, actual));
+        IFormat<BooleanAssignmentGroups> outputFormat = getFormat(format);
+        Result<BooleanAssignmentGroups> expected =
+                IO.load(Path.of("src/test/resources/de/featjar/feature/configuration/" + output), outputFormat);
+        Result<BooleanAssignmentGroups> actual = IO.load(tempFile, outputFormat);
+        Assertions.assertTrue(expected.isPresent(), expected::printProblems);
+        Assertions.assertTrue(actual.isPresent(), actual::printProblems);
+        // AI-generated: compare parsed configurations, not platform-dependent serialized bytes.
+        Assertions.assertEquals(
+                expected.get().getVariableMap().getVariableNames(), actual.get().getVariableMap().getVariableNames());
+        Assertions.assertEquals(expected.get().getGroups().size(), actual.get().getGroups().size());
+        for (int groupIndex = 0; groupIndex < expected.get().getGroups().size(); groupIndex++) {
+            var expectedGroup = expected.get().getGroups().get(groupIndex);
+            var actualGroup = actual.get().getGroups().get(groupIndex);
+            Assertions.assertEquals(expectedGroup.size(), actualGroup.size());
+            for (int assignmentIndex = 0; assignmentIndex < expectedGroup.size(); assignmentIndex++) {
+                Assertions.assertArrayEquals(
+                        expectedGroup.getAll().get(assignmentIndex).get(),
+                        actualGroup.getAll().get(assignmentIndex).get());
+            }
+        }
+    }
+
+    private IFormat<BooleanAssignmentGroups> getFormat(String name) {
+        return switch (name) {
+            case "SimpleBinary" -> new BooleanAssignmentGroupsSimpleBinaryFormat();
+            case "GroupedBinary" -> new BooleanAssignmentGroupsGroupedBinaryFormat();
+            case "SimpleCSV" -> new BooleanAssignmentGroupsCSVFormat();
+            case "GroupedCSV" -> new BooleanAssignmentGroupsGroupedCSVFormat();
+            case "DIMACS" -> new BooleanAssignmentGroupsDimacsFormat();
+            default -> throw new IllegalArgumentException("Unsupported format: " + name);
+        };
     }
 }

@@ -109,9 +109,11 @@ public class UVLFormulaFormatTest extends Common {
 
         assertTrue(result.isPresent(), result::printProblems);
 
+        // AI-generated: the fixture uses the serializer's current pseudo-root marker.
         String expected = new String(
                 Files.readAllBytes(Path.of("src", "test", "resources", "uvl", "formulaSerializeResult.uvl")));
-        Assertions.assertEquals(expected, result.get());
+        // AI-generated: fixture line endings differ between Windows checkouts and Linux CI runners.
+        Assertions.assertEquals(normalizeLineEndings(expected), normalizeLineEndings(result.get()));
     }
 
     @Test
@@ -130,6 +132,10 @@ public class UVLFormulaFormatTest extends Common {
                                 new Not(new Literal("Test7"))))));
 
         compare(expected, result.get(), Expressions::print);
+    }
+
+    private static String normalizeLineEndings(String text) {
+        return text.replace("\r\n", "\n");
     }
 
     @Test
