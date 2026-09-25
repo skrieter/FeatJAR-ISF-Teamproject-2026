@@ -11,6 +11,8 @@ import { registerSidebar } from './sidebar';
 const READY_REQUEST = 'READY';
 const ERROR_PREFIX = 'ERROR:';
 
+const FEATJAR_DOWNLOAD_URL = 'https://github.com/skrieter/FeatJAR-ISF-Teamproject-2026/releases/download/feat.jar/feat.jar';
+
 let extensionShell: ChildProcessWithoutNullStreams | undefined;
 let shellOutputBuffer = '';
 let resolveShellReady: (() => void) | undefined;
@@ -19,31 +21,90 @@ const pendingCommands: Array<(output: string) => void> = [];
 function featJarPath(): string {
 	return path.join(os.homedir(), '.featjar-bin', 'feat.jar');
 }
-// AI-assisted (isSatisfiable function ): Added a satisfiability check before computing core/dead features
-// to prevent the analysis from running on unsatisfiable models.
-async function isSatisfiable(
-    uri: vscode.Uri
-): Promise<boolean> {
 
-    const result = await executeInExtensionShell(
-        [
-            'solutions-sat4j',
-            '--input',
-            uri.fsPath,
-            '--limit',
-            '1',
-            '--format',
-            'SimpleCSV'
-        ]
-    );
+async function checkSatisfiable( uri: vscode.Uri, output: vscode.OutputChannel,): Promise<boolean> {
+    const result = await executeInExtensionShell(['solutions-sat4j', '--input', uri.fsPath, '--limit', '1', '--format', 'SimpleCSV',]);
 
     if (isErrorResult(result)) {
         return false;
     }
 
-    return result.split('\n').some(line => line.startsWith('0;'));
+    const satisfiable = result.split('\n').some(line => line.startsWith('0;'));
+
+    output.clear();
+    output.appendLine(satisfiable? 'The model is satisfiable.': 'The model is not satisfiable.');
+    output.show();
+	return result.split('\n').some(line => line.startsWith('0;'));
 }
-const FEATJAR_DOWNLOAD_URL = 'https://github.com/skrieter/FeatJAR-ISF-Teamproject-2026/releases/download/feat.jar/feat.jar';
+async function printModelStats(uri: vscode.Uri, output: vscode.OutputChannel) {
+    const result = await executeInExtensionShell(['print-model-stats', '--input', uri.fsPath,]);
+
+    if (isErrorResult(result)) {
+        return;
+    }
+
+    console.log(result);
+    output.clear();
+    output.appendLine(`the stats : ${result.trim()}`);
+    output.show();
+}
+async function countConfigurations(uri: vscode.Uri, output: vscode.OutputChannel) {
+    const result = await executeInExtensionShell(['count-sat4j', '--input', uri.fsPath,]);
+
+    if (isErrorResult(result)) {
+        return;
+    }
+
+    console.log(result);
+    output.clear();
+    output.appendLine(`Number of configurations: ${result.trim()}`);
+    output.show();
+}
+
+async function analyzeCoreDead(uri: vscode.Uri | undefined, output: vscode.OutputChannel) {
+    // The implementation here is with AI assistance
+    if (!uri) {
+        vscode.window.showWarningMessage('Select a UVL file in the FeatJAR sidebar.');
+        return;
+    }
+
+    const satisfiable = await checkSatisfiable(uri, output);
+
+    if (!satisfiable) {
+        output.appendLine('Core/Dead analysis not possible: model is not satisfiable.');
+        output.show();
+        return;
+    }
+
+    const result = await executeInExtensionShell(['core-sat4j', '--input', uri.fsPath, '--output-format', 'LiteralList',]);
+
+    if (isErrorResult(result)) {
+        return;
+    }
+
+    // LiteralList separates signed feature names with commas
+    // and assignments with newlines.
+    const literals = result
+		.split(/\r?\n/).map(line => line.trim())
+		.filter(line => line && !/^\[.*?\] \[(INFO|DEBUG|WARN|ERROR)\]/.test(line))
+        .flatMap(line => line.split(','))
+        .map(value => value.trim());
+
+    if (literals.length === 0 || literals.some(value => !/^[+-].+/.test(value))) {
+        throw new Error(
+            'FeatJAR returned no valid core/dead literal list. ' +
+            'Check whether the model is satisfiable.'
+        );
+    }
+
+    const core = literals.filter(value => value.startsWith('+')).length;
+
+    const dead = literals.filter(value => value.startsWith('-')).length;
+
+    output.clear();
+    output.appendLine(`Core Features: ${core} | Dead Features: ${dead}`);
+    output.show();
+}
 
 export async function featJarDownload(): Promise<void> {
 
@@ -156,10 +217,7 @@ function openGui(uri: vscode.Uri) {
 		const parts = output.split('URL:');
 		const url = parts[1].trim();
 
-		vscode.commands.executeCommand(
-			'simpleBrowser.show',
-			url
-		);
+		vscode.commands.executeCommand('simpleBrowser.show',url);
 	}
 	});
 }
@@ -170,120 +228,42 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 	registerSidebar(context);
 	const output = vscode.window.createOutputChannel('FeatJAR');
 	context.subscriptions.push(output);
+	
 	const checkSatisfiability = vscode.commands.registerCommand(
 		'featjar-extension.checkSatisfiability',
-		async (uri: vscode.Uri) => {
-			const result = await executeInExtensionShell([
-				'solutions-sat4j',
-				'--input',
-				uri.fsPath,
-				'--limit',
-				'1',
-				'--format',
-				'SimpleCSV',
-			]);
-
-			if (isErrorResult(result)) {
-				return;
-			}
-
-			const satisfiable = result
-				.split('\n')
-				.some(line => line.startsWith('0;'));
-			output.clear();
-			output.appendLine(satisfiable ? 'The model is satisfiable.' : 'The model is not satisfiable.');
-			output.show();
-		},
+		(uri: vscode.Uri) => checkSatisfiable(uri, output)
 	);
 
 	const openFeatJarGui = vscode.commands.registerCommand(
 		'featjar-extension.openGui',
 		(uri: vscode.Uri) => openGui(uri),
 	);
-	const testCommand = vscode.commands.registerCommand(
-		'featjar-extension.TestCommand',() => {
-			vscode.window.showInformationMessage('Test command executed successfully!');
-		});
 
-	const uvlEditorProvider = vscode.window.registerCustomEditorProvider('featjar-extension.uvlEditor',
-	{
-		resolveCustomTextEditor(
-			document: vscode.TextDocument,
-			webviewPanel: vscode.WebviewPanel
-		) {
-			openGui(document.uri);
-		}
-	});
+	const uvlEditorProvider = vscode.window.registerCustomEditorProvider(
+		'featjar-extension.uvlEditor',
+		{
+			resolveCustomTextEditor(
+				document: vscode.TextDocument,
+				webviewPanel: vscode.WebviewPanel
+			) {
+				openGui(document.uri);
+			}
+		});
 	const modelTest = vscode.commands.registerCommand(
         'featjar-extension.modelTest',
-        async (uri: vscode.Uri) => {
-       	const result = await executeInExtensionShell(['print-model-stats', '--input', uri.fsPath]);
-			if (isErrorResult(result)) {
-				return;
-			}
-
-			console.log(result);
-			output.clear();
-			//vscode.window.showInformationMessage(`the stats : ${result}`);
-			output.appendLine(`the stats : ${result.trim()}`);
-			output.show();
-        }
+		(uri: vscode.Uri) => printModelStats(uri, output),
     );
-	const countConfigurations = vscode.commands.registerCommand(
-    'featjar-extension.countConfigurations',
-    async (uri: vscode.Uri) => {
-        const result = await executeInExtensionShell(['count-sat4j', '--input', uri.fsPath]);
-		if (isErrorResult(result)) {
-			return;
-		}
-
-		console.log(result);
-		output.clear();
-		output.appendLine(`Number of configurations: ${result.trim()}`);
-		output.show();
-    });
+	const countConfigurationsCommand = vscode.commands.registerCommand(
+    	'featjar-extension.countConfigurations',
+		(uri: vscode.Uri) => countConfigurations(uri, output),
+    );
 	const coreDeadFeatures = vscode.commands.registerCommand(
         'featjar-extension.coreDeadFeatures',
-        async (uri: vscode.Uri | undefined) => {
-			// The implementation here is with Ai assisted 
-            if (!uri) {
-                vscode.window.showWarningMessage('Select a UVL file in the FeatJAR sidebar.');
-                return;
-            }            
-
-			const satisfiable = await isSatisfiable(uri);
-
-			if (!satisfiable) {
-    			output.appendLine('Core/Dead analysis not possible: model is not satisfiable.');
-    			output.show();
-    			return;
-			}
-            const result = await executeInExtensionShell([
-                'core-sat4j', '--input', uri.fsPath, '--output-format', 'LiteralList'
-            ]);
-            if (isErrorResult(result)) {
-                return;
-            }
-
-            // LiteralList separates signed feature names with commas and assignments with newlines.
-            const literals = result.split(/\r?\n/)
-                .map(line => line.trim())
-                .filter(line => line && !/^\[.*?\] \[(INFO|DEBUG|WARN|ERROR)\]/.test(line))
-                .flatMap(line => line.split(','))
-                .map(value => value.trim());
-            if (literals.length === 0 || literals.some(value => !/^[+-].+/.test(value))) {
-                throw new Error('FeatJAR returned no valid core/dead literal list. Check whether the model is satisfiable.');
-            }
-            const core = literals.filter(value => value.startsWith('+')).length;
-            const dead = literals.filter(value => value.startsWith('-')).length;
-            output.clear();
-			output.appendLine(`Core Features: ${core} | Dead Features: ${dead}`);
-			output.show();
-        }
+        (uri: vscode.Uri | undefined) => analyzeCoreDead(uri, output),
     );
 	
 
-context.subscriptions.push(checkSatisfiability, openFeatJarGui, uvlEditorProvider, modelTest, countConfigurations, coreDeadFeatures);
+context.subscriptions.push(checkSatisfiability, openFeatJarGui, uvlEditorProvider, modelTest, countConfigurationsCommand, coreDeadFeatures);
 }
 
 export function deactivate(): void {
