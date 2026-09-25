@@ -44,7 +44,7 @@ import { FeatureCardinalityEdgeView } from './feature-edge-view';
 import { getParameters } from './url-parameters';
 import { SessionManagementPanel } from './session-management-panel';
 import { FeatureSearchProvider } from './feature-search-provider';
-import { ImmediateNodeCreationTool } from './immediate-node-creation-tool';
+import { FeatureSearchBar } from './feature-search-bar';
 
 import '../css/diagram.css';
 import '../css/command-palette.css';
@@ -102,7 +102,10 @@ export default function createContainer(options: IDiagramOptions): Container {
     container.bind(TYPES.IDiagramStartup).toService(SessionManagementPanel);
     // Command palette search
     container.bind(TYPES.ICommandPaletteActionProvider).to(FeatureSearchProvider).inSingletonScope();
-
+    // Persistent feature search bar
+    container.bind(FeatureSearchBar).toSelf().inSingletonScope();
+    container.bind(TYPES.IUIExtension).toService(FeatureSearchBar);
+    container.bind(TYPES.IDiagramStartup).toService(FeatureSearchBar);
     // Cardinality labels
     configureModelElement(ctx, 'label-edge-cardinality', GLabel, GLabelView);
     configureModelElement(ctx, 'label-node-cardinality', GLabel, GLabelView);
