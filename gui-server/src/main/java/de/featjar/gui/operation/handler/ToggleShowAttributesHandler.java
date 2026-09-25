@@ -11,7 +11,6 @@ import org.eclipse.glsp.server.operations.GModelOperationHandler;
  * so the diagram can include or leave out the attribute labels
  * the next time it's rebuilt.
  */
-
 public class ToggleShowAttributesHandler extends GModelOperationHandler<ToggleShowAttributesOperation> {
 
     public static final String SHOW_ATTRIBUTES_PROPERTY = "showAttributes";

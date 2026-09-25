@@ -20,8 +20,10 @@
  */
 package de.featjar.gui.io;
 
+import de.featjar.base.data.IAttribute;
 import de.featjar.base.data.Result;
 import de.featjar.base.tree.Trees;
+import de.featjar.feature.model.FeatureModelAttributes;
 import de.featjar.feature.model.FeatureTree.Group;
 import de.featjar.feature.model.IConstraint;
 import de.featjar.feature.model.IFeatureModel;
@@ -31,10 +33,8 @@ import de.featjar.formula.io.textual.ExpressionSerializer.Notation;
 import de.featjar.formula.io.textual.ShortSymbols;
 import de.featjar.gui.types.AttributeKeys;
 import de.featjar.gui.types.FeatureImplementationTypes;
-import java.util.UUID;
-import de.featjar.base.data.IAttribute;
-import de.featjar.feature.model.FeatureModelAttributes;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * Writes a feature model in the FeatJAR EMF format.
@@ -139,7 +139,8 @@ public class EMFFeatureModelWriter {
      * {@code {key value}} block), skipping the abstract/hidden
      */
     private void writeCustomAttributes(IFeatureTree tree, int depth) {
-        Map<IAttribute<?>, Object> attributes = tree.getFeature().getAttributes().orElse(Map.of());
+        Map<IAttribute<?>, Object> attributes =
+                tree.getFeature().getAttributes().orElse(Map.of());
 
         for (Map.Entry<IAttribute<?>, Object> entry : attributes.entrySet()) {
             IAttribute<?> attribute = entry.getKey();

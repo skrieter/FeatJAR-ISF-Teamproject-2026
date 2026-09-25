@@ -36,6 +36,7 @@ import de.featjar.gui.operation.handler.SetCardinalityGroupNodeBoundsHandler;
 import de.featjar.gui.operation.handler.SetFeatureColorHandler;
 import de.featjar.gui.operation.handler.SetFeatureImplementationHandler;
 import de.featjar.gui.operation.handler.SetGroupNodeTypeHandler;
+import de.featjar.gui.operation.handler.ToggleShowAttributesHandler;
 import de.featjar.gui.operation.handler.create.feature.CreateMandatoryFeatureNodeHandler;
 import de.featjar.gui.operation.handler.create.feature.CreateMultipleFeatureNodeHandler;
 import de.featjar.gui.operation.handler.create.feature.CreateOptionalFeatureNodeHandler;
@@ -57,7 +58,6 @@ import org.eclipse.glsp.server.features.directediting.LabelEditValidator;
 import org.eclipse.glsp.server.features.toolpalette.ToolPaletteItemProvider;
 import org.eclipse.glsp.server.layout.LayoutEngine;
 import org.eclipse.glsp.server.operations.OperationHandler;
-import de.featjar.gui.operation.handler.ToggleShowAttributesHandler;
 
 /**
  * Determines which classes (bindings) are used.

@@ -7,7 +7,6 @@ import org.eclipse.glsp.server.operations.Operation;
  * Carries the "Show attributes" checkbox state from the client to the server
  * whenever it's switched on or off.
  */
-
 public class ToggleShowAttributesOperation extends Operation {
 
     public static final String KIND = "toggleShowAttributes";
