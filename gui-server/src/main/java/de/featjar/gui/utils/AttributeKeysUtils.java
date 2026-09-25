@@ -26,8 +26,8 @@ import featJAR.Attributes;
 import featJAR.FeatJARFactory;
 import featJAR.Feature;
 import featJAR.Identifiable;
-import java.util.Optional;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -91,8 +91,8 @@ public final class AttributeKeysUtils {
      * to store its own view settings on a feature. These are not shown to the
      * user as regular attributes.
      */
-    private static final Set<String> INTERNAL_KEYS = Set.of(AttributeKeys.IMPLLEMENTATION, AttributeKeys.HIDDEN,
-            AttributeKeys.COLOR);
+    private static final Set<String> INTERNAL_KEYS =
+            Set.of(AttributeKeys.IMPLLEMENTATION, AttributeKeys.HIDDEN, AttributeKeys.COLOR);
 
     /**
      * Returns a feature's own attributes, filtering out the ones this editor

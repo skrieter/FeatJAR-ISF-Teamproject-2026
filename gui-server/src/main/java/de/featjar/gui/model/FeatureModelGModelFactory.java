@@ -22,6 +22,7 @@ package de.featjar.gui.model;
 
 import de.featjar.gui.model.FeatureTreeLayouter.NodeSubtreeResult;
 import de.featjar.gui.model.FeatureTreeLayouter.TreeNode;
+import de.featjar.gui.operation.handler.ToggleShowAttributesHandler;
 import de.featjar.gui.types.CardinalityType;
 import de.featjar.gui.types.EdgeType;
 import de.featjar.gui.types.FeatureImplementationTypes;
@@ -30,6 +31,7 @@ import de.featjar.gui.types.GroupNodeType;
 import de.featjar.gui.utils.AttributeKeysUtils;
 import de.featjar.gui.utils.CardinalityUtils;
 import de.featjar.gui.utils.CollapseUtils;
+import featJAR.Attributes;
 import featJAR.Cardinality;
 import featJAR.Constraint;
 import featJAR.Feature;
@@ -54,8 +56,6 @@ import org.eclipse.glsp.graph.util.GConstants;
 import org.eclipse.glsp.graph.util.GraphUtil;
 import org.eclipse.glsp.server.emf.model.notation.Diagram;
 import org.eclipse.glsp.server.emf.notation.EMFNotationGModelFactory;
-import de.featjar.gui.operation.handler.ToggleShowAttributesHandler;
-import featJAR.Attributes;
 
 /**
  * Builds the graphical model from the semantic feature model.

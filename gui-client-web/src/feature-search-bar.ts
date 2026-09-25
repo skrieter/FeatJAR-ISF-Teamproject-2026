@@ -8,7 +8,7 @@ import {
     TYPES
 } from '@eclipse-glsp/client';
 import { injectable, inject } from 'inversify';
-import { findMatchingElements , FeatureMatch } from './feature-search-utils';
+import { findMatchingElements, FeatureMatch } from './feature-search-utils';
 
 /**
  * Persistent search bar at the top of the diagram.
@@ -58,7 +58,7 @@ export class FeatureSearchBar extends AbstractUIExtension implements IDiagramSta
                 this.selectMatch(this.currentIndex + (event.shiftKey ? -1 : 1));
             }
         };
-         input.onfocus = () => {
+        input.onfocus = () => {
             if (input.value) {
                 this.renderSuggestions(input.value);
             }

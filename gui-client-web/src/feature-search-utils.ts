@@ -19,7 +19,7 @@ export function findMatchingElements(root: Readonly<GModelRoot>, text: string): 
         if (!css.some(c => c.includes('feature-'))) {
             continue;
         }
-        const label=getElementLabel(element);
+        const label = getElementLabel(element);
         if (!label) {
             continue;
         }

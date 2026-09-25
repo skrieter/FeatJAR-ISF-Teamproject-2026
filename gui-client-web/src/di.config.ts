@@ -35,7 +35,7 @@ import {
     GLabelView,
     editLabelFeature,
     contextMenuModule,
-    NodeCreationTool 
+    NodeCreationTool
 } from '@eclipse-glsp/client';
 import { Container } from 'inversify';
 import { makeLoggerMiddleware } from 'inversify-logger-middleware';
@@ -45,6 +45,7 @@ import { getParameters } from './url-parameters';
 import { SessionManagementPanel } from './session-management-panel';
 import { FeatureSearchProvider } from './feature-search-provider';
 import { FeatureSearchBar } from './feature-search-bar';
+import { ImmediateNodeCreationTool } from './immediate-node-creation-tool';
 
 import '../css/diagram.css';
 import '../css/command-palette.css';
