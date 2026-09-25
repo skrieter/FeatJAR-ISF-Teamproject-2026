@@ -61,7 +61,7 @@ public class IndentFormatter implements IFormatter {
 
     @Override
     public String getPrefix(String message, Verbosity verbosity) {
-        return String.valueOf(symbol).repeat(Math.max(0, level + 1));
+        return String.valueOf(symbol).repeat(Math.max(0, level));
     }
 
     public static String formatList(Collection<?> collection) {
