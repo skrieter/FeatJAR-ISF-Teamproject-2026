@@ -54,17 +54,18 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class Preprocessor {
-
-    public static enum Inclusion {
+   public static enum Inclusion {
         ALWAYS,
         SOMETIMES,
         NEVER
-    private static final String IF_GROUP = "if";
-    private static final String ELIF_GROUP = "elif";
-    private static final String ELSE_GROUP = "else";
-    private static final String ENDIF_GROUP = "endif";
-    private static final String IF_CONDITION_GROUP = "ifCondition";
-    private static final String ELIF_CONDITION_GROUP = "elifCondition";
+    }
+
+    protected static final String IF_GROUP = "if";
+    protected static final String ELIF_GROUP = "elif";
+    protected static final String ELSE_GROUP = "else";
+    protected static final String ENDIF_GROUP = "endif";
+    protected static final String IF_CONDITION_GROUP = "ifCondition";
+    protected static final String ELIF_CONDITION_GROUP = "elifCondition";
 
     /**
      * Describes the syntax of annotations, i.e., their prefix and suffix, their keywords, how conditions are delimited,
@@ -221,9 +222,17 @@ public class Preprocessor {
 
     private final ExpressionParser annotationParser;
 
-    private final Pattern annotationPattern;
+    protected final Pattern annotationPattern;
     private final Pattern annotationPrefixPattern;
     private final String annotationPrefix;
+
+    /**
+     * {@return the symbols used to parse annotation conditions}
+     */
+    public Symbols getSymbols() {
+        return annotationParser.getSymbols();
+    }
+    // -------------------------------------------------------------------------
 
     private class Filter implements Predicate<String> {
 
