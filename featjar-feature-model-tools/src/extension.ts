@@ -8,6 +8,9 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { registerSidebar } from './sidebar';
 
+const READY_REQUEST = 'READY';
+const ERROR_PREFIX = 'ERROR:';
+
 let extensionShell: ChildProcessWithoutNullStreams | undefined;
 let shellOutputBuffer = '';
 let resolveShellReady: (() => void) | undefined;
@@ -86,6 +89,19 @@ function startExtensionShell(jarPath: string): Promise<void> {
 
 	return new Promise(resolve => {
 		resolveShellReady = resolve;
+		
+		extensionShell?.on('error', () => {
+			resolveShellReady = undefined;
+			void vscode.window.showErrorMessage('Could not start FeatJAR. Check that Java is installed and FeatJAR is available.');
+			resolve();
+		});
+		extensionShell?.on('close', () => {
+			if (resolveShellReady) {
+				resolveShellReady = undefined;
+				void vscode.window.showErrorMessage('FeatJAR exited before it was ready.');
+				resolve();
+			}
+		});
 	});
 }
 
@@ -97,9 +113,11 @@ function readShellOutput(data: string): void {
 		const line = shellOutputBuffer.slice(0, lineBreakIndex).replace(/\r$/, '');
 		shellOutputBuffer = shellOutputBuffer.slice(lineBreakIndex + 1);
 
-		if (line === 'READY') {
+		if (line === READY_REQUEST) {
 			if (resolveShellReady !== undefined) {
-				resolveShellReady();
+				const resolve = resolveShellReady;
+				resolveShellReady = undefined;
+				resolve();
 			}
 			continue;
 		}
@@ -120,7 +138,7 @@ function executeInExtensionShell(args: string[]): Promise<string> {
 }
 
 function isErrorResult(output: string): boolean {
-	if (!output.startsWith('ERROR:')) {
+	if (!output.startsWith(ERROR_PREFIX)) {
 		return false;
 	}
 
@@ -265,7 +283,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     );
 	
 
-context.subscriptions.push(checkSatisfiability, openFeatJarGui, uvlEditorProvider, testCommand,);
+context.subscriptions.push(checkSatisfiability, openFeatJarGui, uvlEditorProvider, modelTest, countConfigurations, coreDeadFeatures);
 }
 
 export function deactivate(): void {

@@ -50,7 +50,8 @@ import java.util.Base64;
  */
 public final class ExtensionShell {
     private ExtensionShell() {}
-
+    private static final String SHUTDOWN_REQUEST = "SHUTDOWN";
+    private static final String RUN_REQUEST = "RUN";
     /**
      * Starts the extension shell as a standalone Java process.
      *
@@ -80,7 +81,7 @@ public final class ExtensionShell {
 
             String line;
             while ((line = input.readLine()) != null) {
-                if ("SHUTDOWN".equals(line)) {
+                if (SHUTDOWN_REQUEST.equals(line)) {
                     protocolOutput.println("BYE");
                     protocolOutput.flush();
                     return FeatJAR.EXIT_SUCCESS;
@@ -113,7 +114,7 @@ public final class ExtensionShell {
 
     private static Request parseRequest(String line) {
         final String[] fields = line.split("\\t", -1);
-        if (fields.length < 1 || !"RUN".equals(fields[0])) {
+        if (fields.length < 1 || !RUN_REQUEST.equals(fields[0])) {
             throw new IllegalArgumentException("Expected a RUN request");
         }
 
