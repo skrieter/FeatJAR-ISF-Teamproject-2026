@@ -14,6 +14,8 @@ const ERROR_PREFIX = 'ERROR:';
 let extensionShell: ChildProcessWithoutNullStreams | undefined;
 let shellOutputBuffer = '';
 let resolveShellReady: (() => void) | undefined;
+let pendingGuiUrl: string | undefined;
+let trustStatusBarItem: vscode.StatusBarItem | undefined;
 const pendingCommands: Array<(output: string) => void> = [];
 
 function featJarPath(): string {
@@ -147,27 +149,96 @@ function isErrorResult(output: string): boolean {
 }
 
 function openGui(uri: vscode.Uri) {
-	const featjarPath = path.join(os.homedir(),'.featjar-bin','feat.jar');
-	const process = spawn('java',['-jar', featjarPath, 'gui', '--input', uri.fsPath]);
-	process.stdout.on('data', (data) => {
-	const output = data.toString();
+	const featjarPath = path.join(os.homedir(), '.featjar-bin', 'feat.jar');
+	const process = spawn('java', ['-jar', featjarPath, 'gui', '--input', uri.fsPath]);
 
-	if (output.includes('URL:')) {
-		const parts = output.split('URL:');
-		const url = parts[1].trim();
+	process.stdout.on('data', async (data) => {
+		const output = data.toString();
 
-		vscode.commands.executeCommand(
-			'simpleBrowser.show',
-			url
-		);
-	}
+		if (output.includes('URL:')) {
+			const parts = output.split('URL:');
+			const url = parts[1].trim();
+
+			const htmlUri = vscode.Uri.parse(url);
+			const htmlPath = htmlUri.fsPath;
+			const htmlFolder = path.dirname(htmlPath);
+
+			const choice = await vscode.window.showWarningMessage(
+				`FeatJAR needs the GUI folder to be trusted.
+
+			The folder path has already been copied to your clipboard:
+
+			${htmlFolder}
+
+			In Workspace Trust:
+			Click "Add Folder"
+			Paste the copied path
+			Confirm the folder
+			Click the yellow FeatJAR button at the bottom`, { modal: true },
+			'Open Workspace Trust'
+			);
+
+			if (choice !== 'Open Workspace Trust') {
+				return;
+			}
+
+			await vscode.env.clipboard.writeText(htmlFolder);
+
+			pendingGuiUrl = url;
+
+			await vscode.commands.executeCommand('workbench.trust.manage');
+
+			trustStatusBarItem?.show();
+		}
 	});
+}
+
+function registerGuiTrustConfirmation(context: vscode.ExtensionContext) {
+	trustStatusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 10000);
+
+	trustStatusBarItem.text = '$(warning) FEATJAR: AFTER ADDING THE FOLDER, CLICK HERE';
+	trustStatusBarItem.tooltip = 'Add the copied FeatJAR GUI folder to Trusted Folders & Workspaces. Then click here to continue and open the GUI.';
+	trustStatusBarItem.command = 'featjar-extension.confirmGuiTrust';
+	trustStatusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
+
+	const confirmGuiTrust = vscode.commands.registerCommand(
+		'featjar-extension.confirmGuiTrust',
+		async () => {
+			if (!pendingGuiUrl) {
+				return;
+			}
+
+			const confirmation = await vscode.window.showWarningMessage(
+				'Did you add the copied FeatJAR GUI folder to Trusted Folders & Workspaces?',
+				{ modal: true },
+				'Yes, Open GUI',
+				'Back to Workspace Trust'
+			);
+
+			if (confirmation === 'Back to Workspace Trust') {
+				await vscode.commands.executeCommand('workbench.trust.manage');
+				return;
+			}
+
+			if (confirmation === 'Yes, Open GUI') {
+				trustStatusBarItem?.hide();
+
+				await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+				await vscode.commands.executeCommand('simpleBrowser.show', pendingGuiUrl);
+
+				pendingGuiUrl = undefined;
+			}
+		}
+	);
+
+	context.subscriptions.push(trustStatusBarItem, confirmGuiTrust);
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
 	await featJarDownload();
 	await startExtensionShell(featJarPath());
 	registerSidebar(context);
+	registerGuiTrustConfirmation(context);
 	const output = vscode.window.createOutputChannel('FeatJAR');
 	context.subscriptions.push(output);
 	const checkSatisfiability = vscode.commands.registerCommand(
