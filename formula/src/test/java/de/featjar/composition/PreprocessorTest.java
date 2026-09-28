@@ -26,19 +26,26 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import de.featjar.Common;
 import de.featjar.base.FeatJAR;
+import de.featjar.base.cli.OptionList;
 import de.featjar.base.data.Problem;
 import de.featjar.base.data.Problem.Severity;
 import de.featjar.base.io.format.ParseProblem;
 import de.featjar.base.tree.Trees;
+import de.featjar.composition.cli.PreprocessorCommand;
 import de.featjar.formula.assignment.Assignment;
 import de.featjar.formula.io.textual.ExpressionSerializer;
 import de.featjar.formula.io.textual.JavaSymbols;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /***
  * added the unit test
@@ -409,6 +416,45 @@ public class PreprocessorTest extends Common {
     }
 
     @Test
+    public void partialConfigurationPreservesCustomStyle() {
+        Preprocessor preprocessor = new Preprocessor(new Preprocessor.Style(
+                "<%", "%>", "WHEN", "ORWHEN", "OTHERWISE", "END", "[", "]", false, JavaSymbols.INSTANCE));
+        List<String> output = preprocessor
+                .preprocess(
+                        Stream.of(
+                                "<%WHEN[A]%>",
+                                "a();",
+                                "<%ORWHEN[B]%>",
+                                "b();",
+                                "<%ORWHEN[C]%>",
+                                "c();",
+                                "<%ORWHEN[D]%>",
+                                "d();",
+                                "<%END%>"),
+                        new Assignment("A", false, "D", true),
+                        true)
+                .collect(Collectors.toList());
+        assertEquals(
+                List.of("<%WHEN[B]%>", "b();", "<%ORWHEN[C]%>", "c();", "<%OTHERWISE%>", "d();", "<%END%>"), output);
+        assertTrue(preprocessor.checkSyntax(output.stream()).isEmpty());
+        assertEquals(List.of("d();"), preprocess(preprocessor, output, new Assignment("B", false, "C", false)));
+    }
+
+    @Test
+    public void partialConfigurationPreservesMungeStyle() {
+        Preprocessor preprocessor = new Preprocessor(Preprocessor.Style.MUNGE);
+        List<String> output = preprocessor
+                .preprocess(
+                        Stream.of("/*if[A && B]*/", "a();", "/*else[A && B]*/", "b();", "/*end[A && B]*/"),
+                        new Assignment("A", true),
+                        true)
+                .collect(Collectors.toList());
+        assertEquals(List.of("/*if[B]*/", "a();", "/*else[A && B]*/", "b();", "/*end[A && B]*/"), output);
+        assertEquals(List.of("B"), preprocessor.extractVariableNames(output.stream()));
+        assertEquals(List.of("b();"), preprocess(preprocessor, output, new Assignment("B", false)));
+    }
+
+    @Test
     public void partialConfigurationRewritesElifChains() {
         assertEquals(
                 List.of("//#if B", "b();", "//#else", "c();", "//#endif"),
@@ -462,9 +508,17 @@ public class PreprocessorTest extends Common {
     }
 
     @Test
-    public void partialConfigurationRemovesAnnotationsImpliedByTheirContext() {
+    public void partialConfigurationKeepsConditionsWithoutImpliedVariableValues() {
         assertEquals(
-                List.of("//#if A || B", "a();", "//#if C", "c();", "//#endif", "//#endif"),
+                List.of(
+                        "//#if A || B",
+                        "//#if A || B",
+                        "a();",
+                        "//#endif",
+                        "//#if !(A || B) || C",
+                        "c();",
+                        "//#endif",
+                        "//#endif"),
                 preprocess(
                         new Assignment(),
                         "//#if A || B",
@@ -477,6 +531,107 @@ public class PreprocessorTest extends Common {
                         "//#elif A || B",
                         "b();",
                         "//#endif"));
+    }
+
+    @Test
+    public void partialConfigurationInfersVariablesFromNegatedDisjunctions() {
+        assertEquals(
+                List.of("//#if !(A || B)", "a();", "//#if C", "b();", "//#endif", "//#endif"),
+                preprocess(
+                        new Assignment(),
+                        "//#if !(A || B)",
+                        "//#if !A && !B",
+                        "a();",
+                        "//#endif",
+                        "//#if !A && C",
+                        "b();",
+                        "//#endif",
+                        "//#endif"));
+    }
+
+    @Test
+    public void partialConfigurationRestoresAssignmentsAcrossBranches() {
+        assertEquals(
+                List.of(
+                        "//#if A",
+                        "a();",
+                        "//#elif B",
+                        "b();",
+                        "//#else",
+                        "c();",
+                        "//#endif",
+                        "//#if A || B",
+                        "d();",
+                        "//#endif"),
+                preprocess(
+                        new Assignment(),
+                        "//#if A",
+                        "//#if A",
+                        "a();",
+                        "//#endif",
+                        "//#elif B",
+                        "//#if !A && B",
+                        "b();",
+                        "//#endif",
+                        "//#else",
+                        "//#if !A && !B",
+                        "c();",
+                        "//#endif",
+                        "//#endif",
+                        "//#if A || B",
+                        "d();",
+                        "//#endif"));
+    }
+
+    @Test
+    public void partialConfigurationSimplifiesEquivalence() {
+        assertEquals(
+                List.of("//#if B", "a();", "//#endif"),
+                preprocess(new Assignment("A", true), "//#if A == B", "a();", "//#endif"));
+        assertEquals(
+                List.of("//#if !B", "a();", "//#endif"),
+                preprocess(new Assignment("A", false), "//#if A == B", "a();", "//#endif"));
+    }
+
+    @Test
+    public void undecidedAnnotationsFailWithoutPartialProcessing() {
+        IllegalArgumentException error =
+                assertThrows(IllegalArgumentException.class, () -> new Preprocessor("//#", JavaSymbols.INSTANCE)
+                        .preprocess(Stream.of("//#if A", "a();", "//#endif"), new Assignment())
+                        .collect(Collectors.toList()));
+        assertEquals("Line 1: could not evaluate annotation: //#if A", error.getMessage());
+    }
+
+    @Test
+    public void undecidedAnnotationsInExcludedBranchesAreSkipped() {
+        assertEquals(
+                List.of("b();"),
+                new Preprocessor("//#", JavaSymbols.INSTANCE)
+                        .preprocess(
+                                Stream.of("//#if A", "//#if B", "a();", "//#endif", "//#else", "b();", "//#endif"),
+                                new Assignment("A", false))
+                        .collect(Collectors.toList()));
+    }
+
+    @Test
+    public void processModeAllowsPartialConfigurationsWithFlag(@TempDir Path directory) throws IOException {
+        Path input = Files.write(directory.resolve("input.java"), List.of("#if A && B", "a();", "#endif"));
+        Path configuration = Files.writeString(directory.resolve("config.h"), "#define A\n");
+        Path output = directory.resolve("output.java");
+        PreprocessorCommand command = new PreprocessorCommand();
+        for (boolean allowPartial : List.of(false, true)) {
+            List<String> arguments = new ArrayList<>(List.of(
+                    "--input", input.toString(),
+                    "--configuration", configuration.toString(),
+                    "--output", output.toString()));
+            if (allowPartial) {
+                arguments.add("--allow-partial");
+            }
+            OptionList options = new OptionList(command.getOptions(), arguments);
+            assertTrue(options.parseArguments().isEmpty());
+            assertEquals(allowPartial ? 0 : 1, command.run(options));
+        }
+        assertEquals(List.of("#if B", "a();", "#endif"), Files.readAllLines(output));
     }
 
     @Test
@@ -514,7 +669,7 @@ public class PreprocessorTest extends Common {
 
     private static List<String> preprocess(Assignment assignment, String... lines) {
         return new Preprocessor("//#", JavaSymbols.INSTANCE)
-                .preprocessPartially(Stream.of(lines), assignment)
+                .preprocess(Stream.of(lines), assignment, true)
                 .collect(Collectors.toList());
     }
 

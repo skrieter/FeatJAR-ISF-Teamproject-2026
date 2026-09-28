@@ -39,19 +39,20 @@ import de.featjar.formula.structure.connective.Not;
 import de.featjar.formula.structure.connective.Or;
 import de.featjar.formula.structure.connective.Reference;
 import de.featjar.formula.structure.predicate.False;
+import de.featjar.formula.structure.predicate.Literal;
 import de.featjar.formula.structure.predicate.True;
-import de.featjar.formula.structure.term.value.Constant;
 import de.featjar.formula.structure.term.value.Variable;
+import de.featjar.formula.visitor.TrueFalseSimplifier;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -219,6 +220,8 @@ public class Preprocessor {
         }
     }
 
+    private final Style style;
+
     private final ExpressionParser annotationParser;
 
     protected final Pattern annotationPattern;
@@ -226,41 +229,6 @@ public class Preprocessor {
     private final String annotationPrefix;
 
     /**
-     * The state of an open if-block, i.e., an if annotation whose endif was not reached yet.
-     */
-    private static final class Block {
-
-        /** Whether the lines around this block are kept. */
-        private final boolean enclosingActive;
-
-        /** Whether the lines of the current branch are kept. */
-        private boolean active;
-
-        /** Whether one of the previous branches is taken for certain, so all following branches are removed. */
-        private boolean decided;
-
-        /** Whether an annotation of this block was kept, so its endif has to be kept, too. */
-        private boolean annotated;
-
-        /** The formulas whose values are known within the current branch. */
-        private Map<IExpression, Boolean> knownValues;
-
-        /** The formulas whose values are known if none of the previous branches is taken. */
-        private Map<IExpression, Boolean> remainingKnownValues;
-
-        private Block(boolean enclosingActive, Map<IExpression, Boolean> knownValues) {
-            this.enclosingActive = enclosingActive;
-            this.knownValues = knownValues;
-            this.remainingKnownValues = knownValues;
-        }
-    }
-
-    /**
-     * Replaces assigned variables with their values, replaces sub-formulas with known values,
-     * and evaluates each sub-expression that is fully determined.
-     * Expects the root to be a {@link Reference}, such that the root expression can be replaced, too.
-     */
-    private static final class Reducer implements ITreeVisitor<IExpression, Void> {
      * {@return the symbols used to parse annotation conditions}
      */
     public Symbols getSymbols() {
@@ -270,110 +238,37 @@ public class Preprocessor {
 
     private class Filter implements Predicate<String> {
 
-        private final Assignment assignment;
-        private final Map<IExpression, Boolean> knownValues;
-
-        private Reducer(Assignment assignment, Map<IExpression, Boolean> knownValues) {
-            this.assignment = assignment;
-            this.knownValues = knownValues;
-        }
-
-        @Override
-        public Result<Void> nodeValidator(List<IExpression> path) {
-            return ITreeVisitor.rootValidator(path, root -> root instanceof Reference, "expected formula reference");
-        }
-
-        @Override
-        public TraversalAction lastVisit(List<IExpression> path) {
-            ITreeVisitor.getCurrentNode(path).replaceChildren(this::reduce);
-            return TraversalAction.CONTINUE;
-        }
-
-        private IExpression reduce(IExpression expression) {
-            if (expression instanceof Variable) {
-                return assignment
-                        .getValue(expression.getName())
-                        .map(value -> (IExpression) new Constant(value, expression.getType()))
-                        .orElse(null);
-            }
-            if (expression.getChildrenCount() == 0) {
-                return null;
-            }
-            List<Object> values =
-                    expression.getChildren().stream().map(Reducer::valueOf).collect(Collectors.toList());
-            Object value = expression.evaluate(values).orElse(null);
-            if (value != null) {
-                if (expression instanceof IFormula) {
-                    return (Boolean) value ? True.INSTANCE : False.INSTANCE;
-                }
-                return new Constant(value, expression.getType());
-            }
-            if (expression instanceof And || expression instanceof Or) {
-                Class<?> neutral = expression instanceof And ? True.class : False.class;
-                expression.flatReplaceChildren(child -> neutral.isInstance(child) ? List.of() : null);
-                if (expression.getChildrenCount() == 1) {
-                    return expression.getFirstChild().get();
-                }
-            }
-            Boolean knownValue = knownValues.get(expression);
-            if (knownValue != null) {
-                return knownValue ? True.INSTANCE : False.INSTANCE;
-            }
-            return null;
-        }
-
-        private static Object valueOf(IExpression expression) {
-            if (expression instanceof True) {
-                return Boolean.TRUE;
-            } else if (expression instanceof False) {
-                return Boolean.FALSE;
-            } else if (expression instanceof Constant) {
-                return ((Constant) expression).getValue();
-            }
-            return null;
-        }
-
-        @Override
-        public Result<Void> getResult() {
-            return Result.ofVoid();
-        }
-    }
-
-    /**
-     * Maps each line to the line that remains after preprocessing, or to {@code null} if the line is removed.
-     * Annotations whose condition cannot be decided with the given assignment are either kept in simplified form
-     * or, if not allowed, treated as {@code false}.
-     */
-    private class Filter implements Function<String, String> {
-
-        private final Assignment assignment;
         private final boolean keepUndecided;
 
-        private final LinkedList<Block> blocks = new LinkedList<>();
+        private final LinkedList<ConditionalState> conditionals = new LinkedList<>();
+        private final LinkedList<Assignment> assignments = new LinkedList<>();
 
         private int lineNumber;
 
         public Filter(Assignment assignment, boolean keepUndecided) {
-            this.assignment = assignment;
+            assignments.push(assignment);
             this.keepUndecided = keepUndecided;
         }
 
         @Override
+        public boolean test(String line) {
+            return apply(line) != null;
+        }
+
+        /** Returns the retained or simplified line, or null if it is removed. */
         public String apply(String line) {
             lineNumber++;
             Matcher matcher = annotationPattern.matcher(line);
             if (!matcher.matches()) {
-                return blocks.isEmpty() || blocks.peek().active ? line : null;
+                return conditionals.isEmpty() || conditionals.peek().branchIncluded ? line : null;
             }
             if (matcher.group(IF_GROUP) != null) {
-                Block enclosing = blocks.peek();
-                blocks.push(
-                        enclosing == null
-                                ? new Block(true, Map.of())
-                                : new Block(enclosing.active, enclosing.knownValues));
+                ConditionalState enclosing = conditionals.peek();
+                conditionals.push(
+                        new ConditionalState(enclosing == null || enclosing.branchIncluded, assignments.size()));
                 return enterBranch(matcher, IF_GROUP, IF_CONDITION_GROUP);
             }
-            if (blocks.isEmpty()) {
+            if (conditionals.isEmpty()) {
                 FeatJAR.log().warning("Line %d: no matching if annotation: %s", lineNumber, line);
                 return null;
             }
@@ -383,16 +278,20 @@ public class Preprocessor {
             if (matcher.group(ELSE_GROUP) != null) {
                 return enterBranch(matcher, ELSE_GROUP, null);
             }
-            return blocks.pop().annotated ? line : null;
+            ConditionalState state = conditionals.pop();
+            while (assignments.size() > state.assignmentDepth) {
+                assignments.pop();
+            }
+            return state.keepEndif ? line : null;
         }
 
         /**
          * {@return the parsed condition, or {@code null} if it cannot be parsed}
          */
         private IFormula parseCondition(String condition) {
-            Result<IExpression> parse = annotationParser.parse(condition);
-            if (parse.isPresent() && parse.get() instanceof IFormula) {
-                return (IFormula) parse.get();
+            Result<IFormula> parse = annotationParser.parse(condition).map(IFormula.class::cast);
+            if (parse.isPresent()) {
+                return parse.get();
             }
             FeatJAR.log().warning("Line %d: could not parse annotation condition: %s", lineNumber, condition);
             return null;
@@ -408,43 +307,168 @@ public class Preprocessor {
          * @return the annotation to keep, or {@code null} if the annotation is removed
          */
         private String enterBranch(Matcher matcher, String keywordGroup, String conditionGroup) {
-            Block block = blocks.peek();
-            block.active = false;
-            if (!block.enclosingActive || block.decided) {
+            ConditionalState state = conditionals.peek();
+            state.branchIncluded = false;
+            if (state.previousCondition != null) {
+                assignments.pop();
+                assignments.push(Trees.traverse(state.previousCondition, new ImpliedAssignments(false))
+                        .orElseThrow());
+                state.previousCondition = null;
+            }
+            if (!state.enclosingBranchIncluded || state.branchTaken) {
                 return null;
             }
             String conditionString = conditionGroup == null ? null : matcher.group(conditionGroup);
             IFormula condition = conditionString == null ? True.INSTANCE : parseCondition(conditionString);
             if (condition != null) {
-                condition = reduce(condition, assignment, block.remainingKnownValues);
+                Reference reference = new Reference(condition);
+                Trees.traverse(reference, new ConditionSimplifier(assignments)).orElseThrow();
+                condition = reference.getExpression();
                 if (condition instanceof False) {
                     return null;
                 }
             }
             String prefix = matcher.group().substring(0, matcher.start(keywordGroup));
             if (condition instanceof True) {
-                block.active = true;
-                block.decided = true;
-                block.knownValues = block.remainingKnownValues;
-                return block.annotated ? prefix + "else" : null;
+                state.branchIncluded = true;
+                state.branchTaken = true;
+                if (!state.keepEndif) {
+                    return null;
+                }
+                return conditionGroup == null ? matcher.group() : prefix + style.elseKeyword + style.suffix;
             }
             if (!keepUndecided) {
-                FeatJAR.log().warning("Line %d: could not evaluate annotation: %s", lineNumber, matcher.group());
-                return null;
+                throw new IllegalArgumentException(
+                        String.format("Line %d: could not evaluate annotation: %s", lineNumber, matcher.group()));
             }
-            block.active = true;
-            if (condition == null) {
-                block.knownValues = block.remainingKnownValues;
-            } else {
-                block.knownValues = withKnownValue(block.remainingKnownValues, condition, true);
-                block.remainingKnownValues = withKnownValue(block.remainingKnownValues, condition, false);
+            state.branchIncluded = true;
+            if (condition != null) {
+                assignments.push(
+                        Trees.traverse(condition, new ImpliedAssignments(true)).orElseThrow());
+                state.previousCondition = condition;
                 ExpressionSerializer serializer = new ExpressionSerializer();
                 serializer.setSymbols(annotationParser.getSymbols());
                 conditionString = Trees.traverse(condition, serializer).orElseThrow();
             }
-            String keyword = block.annotated ? "elif " : "if ";
-            block.annotated = true;
-            return prefix + keyword + conditionString;
+            String keyword = state.keepEndif ? style.elifKeyword : style.ifKeyword;
+            state.keepEndif = true;
+            return prefix + keyword + style.conditionStart + conditionString + style.conditionEnd + style.suffix;
+        }
+    }
+
+    /**
+     * Tracks branch selection and retained annotations until the matching endif.
+     */
+    private static final class ConditionalState {
+
+        /** Whether the enclosing branch can be selected under the current assignment. */
+        private final boolean enclosingBranchIncluded;
+
+        /** Whether lines in the current branch are included in the output. */
+        private boolean branchIncluded;
+
+        /** Whether a branch is certainly taken, so all following branches are removed. */
+        private boolean branchTaken;
+
+        /** Whether an if annotation was retained and needs a matching endif. */
+        private boolean keepEndif;
+
+        /** Stack depth to restore at the matching endif. */
+        private final int assignmentDepth;
+
+        /** Condition assumed true in the current branch and false in subsequent branches. */
+        private IFormula previousCondition;
+
+        private ConditionalState(boolean enclosingBranchIncluded, int assignmentDepth) {
+            this.enclosingBranchIncluded = enclosingBranchIncluded;
+            this.assignmentDepth = assignmentDepth;
+        }
+    }
+
+    /**
+     * Substitutes known literals and simplifies Boolean conditions.
+     * Expects the root to be a {@link Reference}, such that the root expression can be replaced, too.
+     */
+    private static final class ConditionSimplifier extends TrueFalseSimplifier {
+
+        private final List<Assignment> assignments;
+
+        private ConditionSimplifier(List<Assignment> assignments) {
+            this.assignments = assignments;
+        }
+
+        @Override
+        public Result<Void> nodeValidator(List<IFormula> path) {
+            return ITreeVisitor.rootValidator(path, root -> root instanceof Reference, "expected formula reference");
+        }
+
+        @Override
+        public TraversalAction lastVisit(List<IFormula> path) {
+            super.lastVisit(path);
+            ITreeVisitor.getCurrentNode(path).replaceChildren(this::reduce);
+            return TraversalAction.CONTINUE;
+        }
+
+        private IExpression reduce(IExpression expression) {
+            if (expression instanceof Literal) {
+                Literal literal = (Literal) expression;
+                for (Assignment assignment : assignments) {
+                    Object value =
+                            assignment.getValue(literal.getVariable().getName()).orElse(null);
+                    if (value instanceof Boolean) {
+                        return literal.isPositive() == (Boolean) value ? True.INSTANCE : False.INSTANCE;
+                    }
+                }
+            } else if (expression instanceof Not) {
+                IExpression child = ((Not) expression).getExpression();
+                if (child instanceof True || child instanceof False) {
+                    return child instanceof True ? False.INSTANCE : True.INSTANCE;
+                }
+            } else if ((expression instanceof And || expression instanceof Or) && expression.getChildrenCount() == 1) {
+                return expression.getFirstChild().get();
+            }
+            return null;
+        }
+    }
+
+    /** Collects only variable values directly implied by a condition's truth value. */
+    private static final class ImpliedAssignments implements ITreeVisitor<IFormula, Assignment> {
+
+        private final LinkedHashMap<String, Object> values = new LinkedHashMap<>();
+        private boolean value;
+
+        private ImpliedAssignments(boolean value) {
+            this.value = value;
+        }
+
+        @Override
+        public TraversalAction firstVisit(List<IFormula> path) {
+            IFormula formula = ITreeVisitor.getCurrentNode(path);
+            if (formula instanceof Not) {
+                value = !value;
+                return TraversalAction.CONTINUE;
+            }
+            if (value ? formula instanceof And : formula instanceof Or) {
+                return TraversalAction.CONTINUE;
+            }
+            if (formula instanceof Literal) {
+                Literal literal = (Literal) formula;
+                values.put(literal.getVariable().getName(), value == literal.isPositive());
+            }
+            return TraversalAction.SKIP_CHILDREN;
+        }
+
+        @Override
+        public TraversalAction lastVisit(List<IFormula> path) {
+            if (ITreeVisitor.getCurrentNode(path) instanceof Not) {
+                value = !value;
+            }
+            return TraversalAction.CONTINUE;
+        }
+
+        @Override
+        public Result<Assignment> getResult() {
+            return Result.of(new Assignment(values));
         }
     }
 
@@ -489,6 +513,7 @@ public class Preprocessor {
      * @param style the annotation style, e.g., {@link Style#CPP}, {@link Style#ANTENNA}, or {@link Style#MUNGE}
      */
     public Preprocessor(Style style) {
+        this.style = style;
         annotationParser = new ExpressionParser();
         annotationParser.setSymbols(style.getSymbols());
         annotationPattern = style.toPattern();
@@ -496,69 +521,35 @@ public class Preprocessor {
         annotationPrefixPattern = Pattern.compile("^" + Pattern.quote(annotationPrefix));
     }
 
-    private static String group(String name, String regex) {
-        return "(?<" + name + ">" + regex + ")";
-    }
-
     /**
      * {@return a filtered stream that contains only lines that remain after preprocessing with the given variable assignment}
      *
      * <b>Note</b>: The return stream is <b>not state less</b>.
      * It is not suitable for parallel consumption.
-     *
      * @param lines the line stream
      * @param assignment the variable assignment
+     * @throws IllegalArgumentException during consumption if an annotation cannot be decided
      */
     public Stream<String> preprocess(Stream<String> lines, Assignment assignment) {
-        return lines.sequential().map(new Filter(assignment, false)).filter(Objects::nonNull);
+        return preprocess(lines, assignment, false);
     }
 
     /**
-     * {@return a stream of the lines that remain after preprocessing with the given partial variable assignment}
-     * Annotations that cannot be decided are kept, with assigned variables replaced by their values and simplified.
-     * Conditions of nested annotations are also simplified with the values their enclosing annotations imply.
-     * Annotations whose condition cannot be parsed are kept unchanged.
-     *
-     * <b>Note</b>: The return stream is <b>not state less</b>.
+     * {@return a stream of the lines that remain after preprocessing with the given variable assignment}
+     * When undecided annotations are allowed, they are simplified using assigned variables and values implied
+     * by enclosing branches. Unparsable conditions are retained.
      * It is not suitable for parallel consumption.
      *
      * @param lines the line stream
-     * @param assignment the partial variable assignment
+     * @param assignment the variable assignment
+     * @param keepUndecided whether to retain undecided annotations instead of throwing an error
+     * @throws IllegalArgumentException during consumption if an annotation cannot be decided and keepUndecided is false
      */
-    public Stream<String> preprocessPartially(Stream<String> lines, Assignment assignment) {
-        return lines.sequential().map(new Filter(assignment, true)).filter(Objects::nonNull);
-    }
-
-    private static IFormula reduce(IFormula condition, Assignment assignment, Map<IExpression, Boolean> knownValues) {
-        Reference reference = new Reference(condition);
-        Trees.traverse(reference, new Reducer(assignment, knownValues));
-        return reference.getExpression();
-    }
-
-    /**
-     * {@return a copy of the given known values, extended by the given formula with the given value
-     * and all sub-formulas whose values follow directly from it}
-     */
-    private static Map<IExpression, Boolean> withKnownValue(
-            Map<IExpression, Boolean> knownValues, IFormula formula, boolean value) {
-        Map<IExpression, Boolean> extendedKnownValues = new HashMap<>(knownValues);
-        LinkedList<IExpression> formulas = new LinkedList<>(List.of(formula));
-        LinkedList<Boolean> formulaValues = new LinkedList<>(List.of(value));
-        while (!formulas.isEmpty()) {
-            IExpression current = formulas.pop();
-            boolean currentValue = formulaValues.pop();
-            extendedKnownValues.put(current, currentValue);
-            if (current instanceof Not) {
-                formulas.push(((Not) current).getExpression());
-                formulaValues.push(!currentValue);
-            } else if (currentValue ? current instanceof And : current instanceof Or) {
-                for (IExpression child : current.getChildren()) {
-                    formulas.push(child);
-                    formulaValues.push(currentValue);
-                }
-            }
-        }
-        return extendedKnownValues;
+    public Stream<String> preprocess(Stream<String> lines, Assignment assignment, boolean keepUndecided) {
+        Filter filter = new Filter(assignment, keepUndecided);
+        return keepUndecided
+                ? lines.sequential().map(filter::apply).filter(Objects::nonNull)
+                : lines.sequential().filter(filter);
     }
 
     /**

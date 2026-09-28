@@ -57,8 +57,7 @@ public class PreprocessorCommand extends ACommand {
         CHECK_SYNTAX,
         CHECK_STRUCTURE,
         FIND_UNKNOWN_FEATURES,
-        PRINT_PRESENCE_CONDITIONS,
-        PARTIAL_PROCESS
+        PRINT_PRESENCE_CONDITIONS
     }
 
     public static enum MissingVariables {
@@ -100,6 +99,9 @@ public class PreprocessorCommand extends ACommand {
             .setDefaultArgument(MissingVariables.IGNORE.name())
             .setDescription("How to deal with variables in the processed file that do not appear in the given config");
 
+    public static final Option<Boolean> ALLOW_PARTIAL_OPTION = Options.newFlag("allow-partial")
+            .setDescription("Keep undecided annotations in simplified form instead of reporting an error");
+
     public static final Option<AnnotationStyle> STYLE_OPTION = Options.newEnumOption(
                     "annotation-style", AnnotationStyle.class)
             .setDefaultArgument(AnnotationStyle.CPP.name())
@@ -132,15 +134,11 @@ public class PreprocessorCommand extends ACommand {
                 case PROCESS:
                     stream = preprocess(
                             in,
-                            out,
                             optionParser.getResult(CONFIGURATION_OPTION).orElseThrow(),
                             optionParser.getResult(MISSING_VARIABLES_OPTION).orElseThrow(),
+                            optionParser.getResult(ALLOW_PARTIAL_OPTION).orElseThrow(),
                             charset,
                             preprocessor);
-                    break;
-                case PARTIAL_PROCESS:
-                    stream = preprocessPartially(
-                            in, optionParser.getResult(CONFIGURATION_OPTION).orElseThrow(), charset, preprocessor);
                     break;
                 case PRINT_VARIABLES:
                     stream = printVariableNames(in, charset, preprocessor);
@@ -166,24 +164,26 @@ public class PreprocessorCommand extends ACommand {
             return 1;
         }
 
-        if (out != null) {
-            try (BufferedWriter writer = Files.newBufferedWriter(
-                    out, charset, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
-                stream.forEach(line -> {
-                    try {
-                        writer.write(line);
-                        writer.newLine();
-                        writer.flush();
-                    } catch (IOException e) {
-                        FeatJAR.log().error(e);
-                    }
-                });
-            } catch (IOException e) {
-                FeatJAR.log().error(e);
-                return 1;
+        try (Stream<String> output = stream) {
+            if (out != null) {
+                try (BufferedWriter writer = Files.newBufferedWriter(
+                        out, charset, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
+                    output.forEach(line -> {
+                        try {
+                            writer.write(line);
+                            writer.newLine();
+                            writer.flush();
+                        } catch (IOException e) {
+                            FeatJAR.log().error(e);
+                        }
+                    });
+                }
+            } else {
+                output.forEach(FeatJAR.log()::plainMessage);
             }
-        } else {
-            stream.forEach(FeatJAR.log()::plainMessage);
+        } catch (IOException | IllegalArgumentException e) {
+            FeatJAR.log().error(e);
+            return 1;
         }
         return 0;
     }
@@ -200,9 +200,9 @@ public class PreprocessorCommand extends ACommand {
 
     private Stream<String> preprocess(
             Path in,
-            Path out,
             Path assignmentPath,
             MissingVariables missingVariables,
+            boolean allowPartial,
             Charset charset,
             Preprocessor preprocessor)
             throws IOException {
@@ -221,8 +221,7 @@ public class PreprocessorCommand extends ACommand {
                         Boolean.FALSE);
                 break;
             case IGNORE:
-                assignment = addMissingVariablesToAssignment(
-                        parsedAssignment.get(), preprocessor.extractVariableNames(Files.lines(in, charset)), null);
+                assignment = parsedAssignment.get();
                 break;
             case TRUE:
                 assignment = addMissingVariablesToAssignment(
@@ -234,17 +233,7 @@ public class PreprocessorCommand extends ACommand {
                 throw new IllegalStateException(String.valueOf(missingVariables));
         }
 
-        return preprocessor.preprocess(Files.lines(in, charset), assignment);
-    }
-
-    private Stream<String> preprocessPartially(Path in, Path assignmentPath, Charset charset, Preprocessor preprocessor)
-            throws IOException {
-        Result<Assignment> parsedAssignment = IO.load(assignmentPath, new CPPAssignmentFormat());
-        if (parsedAssignment.isEmpty()) {
-            FeatJAR.log().problems(parsedAssignment);
-            return Stream.empty();
-        }
-        return preprocessor.preprocessPartially(Files.lines(in, charset), parsedAssignment.get());
+        return preprocessor.preprocess(Files.lines(in, charset), assignment, allowPartial);
     }
 
     private Assignment addMissingVariablesToAssignment(
