@@ -27,8 +27,11 @@ import de.featjar.base.cli.Option;
 import de.featjar.base.cli.OptionList;
 import de.featjar.base.cli.Options;
 import de.featjar.base.io.IO;
+import de.featjar.composition.Preprocessor;
+import de.featjar.composition.cli.PreprocessorCommand.AnnotationStyle;
+import de.featjar.formula.assignment.Assignment;
 import de.featjar.formula.io.FormulaFormats;
-import de.featjar.formula.io.textual.JavaSymbols;
+import de.featjar.formula.io.textual.CPPAssignmentFormat;
 import de.featjar.formula.structure.IFormula;
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -37,6 +40,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.Iterator;
 import java.util.Optional;
 import java.util.stream.Stream;
 
@@ -44,7 +48,8 @@ public class PreprocessorAnalyzerCommand extends ACommand {
 
     public static enum Mode {
         FIND_DEAD_CODE,
-        PRINT_SUPERFLUOUS_ANNOTATIONS
+        PRINT_SUPERFLUOUS_ANNOTATIONS,
+        PRINT_INCLUSIONS
     }
 
     public static final Option<Mode> MODE_OPTION = Options.newEnumOption("mode", Mode.class)
@@ -52,8 +57,16 @@ public class PreprocessorAnalyzerCommand extends ACommand {
             .setDescription("Mode of operation");
 
     public static final Option<String> PREFIX_OPTION = Options.newOption("annotation-prefix", Options.StringParser)
-            .setDefaultArgument("#")
-            .setDescription("The prefix that precedes each annotation");
+            .setDescription("The prefix that precedes each annotation (overrides the prefix of the annotation style)");
+
+    public static final Option<AnnotationStyle> STYLE_OPTION = Options.newEnumOption(
+                    "annotation-style", AnnotationStyle.class)
+            .setDefaultArgument(AnnotationStyle.CPP.name())
+            .setDescription("The syntax of the annotations (CPP, ANTENNA, or MUNGE)");
+
+    public static final Option<Path> CONFIGURATION_OPTION = Options.newOption("configuration", Options.PathParser)
+            .setDescription("Path to configuration file")
+            .setValidator(Options.PathValidator);
 
     public static final Option<Path> FEATURE_MODEL_OPTION = Options.newOption("feature-model", Options.PathParser)
             .setDescription("Path to feature model file")
@@ -64,9 +77,10 @@ public class PreprocessorAnalyzerCommand extends ACommand {
         Path in = optionParser.getResult(INPUT_OPTION).orElseThrow();
         Path out = optionParser.getResult(OUTPUT_OPTION).orElse(null);
         Charset charset = StandardCharsets.UTF_8;
-        String annotationPrefix = optionParser.getResult(PREFIX_OPTION).orElseThrow();
-
-        PreprocessorAnalyzer preprocessor = new PreprocessorAnalyzer(annotationPrefix, JavaSymbols.INSTANCE);
+        Preprocessor.Style style =
+                optionParser.getResult(STYLE_OPTION).orElseThrow().getStyle();
+        style = style.withPrefix(optionParser.getResult(PREFIX_OPTION).orElse(style.getPrefix()));
+        PreprocessorAnalyzer preprocessor = new PreprocessorAnalyzer(style);
 
         Mode mode = optionParser.getResult(MODE_OPTION).orElseThrow();
 
@@ -79,6 +93,9 @@ public class PreprocessorAnalyzerCommand extends ACommand {
                 case PRINT_SUPERFLUOUS_ANNOTATIONS:
                     stream = printSuperfluousAnnotations(in, charset, preprocessor, optionParser);
                     break;
+                case PRINT_INCLUSIONS:
+                    stream = printInclusions(in, charset, preprocessor, optionParser);
+                    break;
                 default:
                     return 1;
             }
@@ -87,24 +104,26 @@ public class PreprocessorAnalyzerCommand extends ACommand {
             return 1;
         }
 
-        if (out != null) {
-            try (BufferedWriter writer = Files.newBufferedWriter(
-                    out, charset, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
-                stream.forEach(line -> {
-                    try {
-                        writer.write(line);
-                        writer.newLine();
-                        writer.flush();
-                    } catch (IOException e) {
-                        FeatJAR.log().error(e);
-                    }
-                });
-            } catch (IOException e) {
-                FeatJAR.log().error(e);
-                return 1;
+        try (Stream<String> output = stream) {
+            if (out != null) {
+                try (BufferedWriter writer = Files.newBufferedWriter(
+                        out, charset, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
+                    output.forEach(line -> {
+                        try {
+                            writer.write(line);
+                            writer.newLine();
+                            writer.flush();
+                        } catch (IOException e) {
+                            FeatJAR.log().error(e);
+                        }
+                    });
+                }
+            } else {
+                output.forEach(FeatJAR.log()::plainMessage);
             }
-        } else {
-            stream.forEach(FeatJAR.log()::plainMessage);
+        } catch (IOException e) {
+            FeatJAR.log().error(e);
+            return 1;
         }
         return 0;
     }
@@ -119,6 +138,18 @@ public class PreprocessorAnalyzerCommand extends ACommand {
         }
     }
 
+    private Stream<String> printInclusions(
+            Path in, Charset charset, PreprocessorAnalyzer preprocessor, OptionList optionParser) throws IOException {
+        Path assignmentPath = optionParser.getResult(CONFIGURATION_OPTION).orElseThrow();
+        Assignment assignment =
+                IO.load(assignmentPath, new CPPAssignmentFormat()).orElseThrow();
+        Iterator<PreprocessorAnalyzer.Inclusion> inclusions;
+        try (Stream<String> lines = Files.lines(in, charset)) {
+            inclusions = preprocessor.computeInclusions(lines, assignment).iterator();
+        }
+        return Files.lines(in, charset).map(line -> String.format("%-9s %s", inclusions.next(), line));
+    }
+
     private Stream<String> printSuperfluousAnnotations(
             Path in, Charset charset, PreprocessorAnalyzer preprocessor, OptionList optionParser) throws IOException {
         Path featureModelPath = optionParser.getResult(FEATURE_MODEL_OPTION).orElseThrow();
@@ -131,7 +162,7 @@ public class PreprocessorAnalyzerCommand extends ACommand {
 
     @Override
     public Optional<String> getDescription() {
-        return Optional.of("Finds dead code and superfluous annotations using SAT4J");
+        return Optional.of("Finds dead code, superfluous annotations, and line inclusions using SAT4J");
     }
 
     @Override

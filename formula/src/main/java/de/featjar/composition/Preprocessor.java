@@ -25,17 +25,13 @@ import de.featjar.base.data.Problem;
 import de.featjar.base.data.Problem.Severity;
 import de.featjar.base.data.Result;
 import de.featjar.base.io.format.ParseProblem;
-import de.featjar.base.tree.Trees;
 import de.featjar.formula.assignment.Assignment;
-import de.featjar.formula.io.textual.ExpressionSerializer;
 import de.featjar.formula.io.textual.JavaSymbols;
 import de.featjar.formula.io.textual.Symbols;
 import de.featjar.formula.structure.IExpression;
 import de.featjar.formula.structure.IFormula;
 import de.featjar.formula.structure.connective.And;
-import de.featjar.formula.structure.connective.IConnective;
 import de.featjar.formula.structure.connective.Not;
-import de.featjar.formula.structure.connective.Or;
 import de.featjar.formula.structure.predicate.False;
 import de.featjar.formula.structure.predicate.True;
 import de.featjar.formula.structure.term.value.Variable;
@@ -54,11 +50,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class Preprocessor {
-   public static enum Inclusion {
-        ALWAYS,
-        SOMETIMES,
-        NEVER
-    }
 
     protected static final String IF_GROUP = "if";
     protected static final String ELIF_GROUP = "elif";
@@ -398,87 +389,6 @@ public class Preprocessor {
     }
 
     /**
-     * {@return a stream of the lines that remain after preprocessing with the given partial variable assignment}
-     * Annotations that cannot be decided are kept, with assigned variables replaced by their values and simplified.
-     *
-     * <b>Note</b>: The return stream is <b>not state less</b>.
-     * It is not suitable for parallel consumption.
-     *
-     * @param lines the line stream
-     * @param assignment the partial variable assignment
-     */
-    public Stream<String> preprocessPartially(Stream<String> lines, Assignment assignment) {
-        // per open #if: {keep current branch, a previous branch is certainly taken, an annotation was kept}
-        LinkedList<boolean[]> stack = new LinkedList<>();
-        return lines.sequential()
-                .map(line -> preprocessLinePartially(line, stack, assignment))
-                .filter(Objects::nonNull);
-    }
-
-    private String preprocessLinePartially(String line, LinkedList<boolean[]> stack, Assignment assignment) {
-        Matcher matcher = annotationPattern.matcher(line);
-        if (!matcher.matches()) {
-            return stack.isEmpty() || stack.peek()[0] ? line : null;
-        }
-        if (matcher.group(4) == null && stack.isEmpty()) {
-            FeatJAR.log().warning("no matching #if: %s", line);
-            return null;
-        }
-        if (matcher.group(2) != null) {
-            return stack.pop()[2] ? line : null;
-        }
-        IExpression condition = True.INSTANCE;
-        String conditionString = matcher.group(4) != null ? matcher.group(5) : matcher.group(7);
-        if (conditionString != null) {
-            Result<IExpression> parse = annotationParser.parse(conditionString);
-            if (parse.isEmpty()) {
-                FeatJAR.log().warning("could not parse annotation: %s", line);
-                return line;
-            }
-            condition = reduce(parse.get(), assignment);
-        }
-        if (matcher.group(4) != null) {
-            stack.push(new boolean[] {false, !(stack.isEmpty() || stack.peek()[0]), false});
-        }
-        boolean[] block = stack.peek();
-        block[0] = !block[1] && !(condition instanceof False);
-        if (!block[0]) {
-            return null;
-        }
-        String prefix = line.substring(0, matcher.start(1));
-        if (condition instanceof True) {
-            block[1] = true;
-            return block[2] ? prefix + "else" : null;
-        }
-        String keyword = block[2] ? "elif " : "if ";
-        block[2] = true;
-        ExpressionSerializer serializer = new ExpressionSerializer();
-        serializer.setSymbols(annotationParser.getSymbols());
-        return prefix + keyword + Trees.traverse(condition, serializer).orElseThrow();
-    }
-
-    private static IExpression reduce(IExpression expression, Assignment assignment) {
-        Object value = expression.evaluate(assignment).orElse(null);
-        if (value instanceof Boolean && expression instanceof IFormula) {
-            return (Boolean) value ? True.INSTANCE : False.INSTANCE;
-        }
-        if (!(expression instanceof IConnective)) {
-            return expression;
-        }
-        List<IExpression> children = expression.getChildren().stream()
-                .map(child -> reduce(child, assignment))
-                .filter(child -> !(expression instanceof And && child instanceof True
-                        || expression instanceof Or && child instanceof False))
-                .collect(Collectors.toList());
-        if (children.size() == 1 && (expression instanceof And || expression instanceof Or)) {
-            return children.get(0);
-        }
-        IExpression reduced = (IExpression) expression.cloneNode();
-        reduced.setChildren(children);
-        return reduced;
-    }
-
-    /**
      * {@return the presence condition of each line, in order}
      *
      * @param lines the line stream
@@ -516,22 +426,6 @@ public class Preprocessor {
                     }
                     return (IFormula) False.INSTANCE;
                 })
-                .collect(Collectors.toList());
-    }
-
-    /**
-     * {@return for each line, in order, whether it is always, sometimes, or never part of a variant of the given partial variable assignment}
-     * Annotation lines are never part of a variant.
-     *
-     * @param lines the line stream
-     * @param assignment the partial variable assignment
-     */
-    public List<Inclusion> computeInclusions(Stream<String> lines, Assignment assignment) {
-        return computePresenceConditions(lines).stream()
-                .map(condition -> condition
-                        .evaluate(assignment)
-                        .map(value -> Boolean.TRUE.equals(value) ? Inclusion.ALWAYS : Inclusion.NEVER)
-                        .orElse(Inclusion.SOMETIMES))
                 .collect(Collectors.toList());
     }
 

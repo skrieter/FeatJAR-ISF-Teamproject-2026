@@ -20,9 +20,6 @@
  */
 package de.featjar.composition;
 
-import static de.featjar.composition.Preprocessor.Inclusion.ALWAYS;
-import static de.featjar.composition.Preprocessor.Inclusion.NEVER;
-import static de.featjar.composition.Preprocessor.Inclusion.SOMETIMES;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -33,7 +30,6 @@ import de.featjar.base.data.Problem;
 import de.featjar.base.data.Problem.Severity;
 import de.featjar.base.io.format.ParseProblem;
 import de.featjar.base.tree.Trees;
-import de.featjar.composition.Preprocessor.Inclusion;
 import de.featjar.formula.assignment.Assignment;
 import de.featjar.formula.io.textual.ExpressionSerializer;
 import de.featjar.formula.io.textual.JavaSymbols;
@@ -394,108 +390,6 @@ public class PreprocessorTest extends Common {
         assertEquals(
                 List.of("line 1: unknown feature \"A\"", "line 4: unknown feature \"A\""),
                 unknownFeatures("//#if A", "a();", "//#endif", "//#if !A", "b();", "//#endif"));
-    }
-
-    @Test
-    public void partialConfigurationReducesUndecidedAnnotations() {
-        assertEquals(
-                List.of("//#if B", "a();", "//#endif", "c();"),
-                preprocess(
-                        new Assignment("A", true),
-                        "//#if A && B",
-                        "a();",
-                        "//#endif",
-                        "//#if !A",
-                        "b();",
-                        "//#else",
-                        "c();",
-                        "//#endif"));
-    }
-
-    @Test
-    public void partialConfigurationRewritesElifChains() {
-        assertEquals(
-                List.of("//#if B", "b();", "//#else", "c();", "//#endif"),
-                preprocess(
-                        new Assignment("A", false, "C", true),
-                        "//#if A",
-                        "a();",
-                        "//#elif B",
-                        "b();",
-                        "//#elif C || D",
-                        "c();",
-                        "//#else",
-                        "d();",
-                        "//#endif"));
-    }
-
-    @Test
-    public void partialConfigurationKeepsNestedUndecidedAnnotations() {
-        assertEquals(
-                List.of("//#if B", "//#if !C", "a();", "//#endif", "//#endif"),
-                preprocess(
-                        new Assignment("A", true),
-                        "//#if A",
-                        "//#if B",
-                        "//#if !C",
-                        "a();",
-                        "//#endif",
-                        "//#endif",
-                        "//#endif",
-                        "//#if !A",
-                        "b();",
-                        "//#endif"));
-    }
-
-    @Test
-    public void completeConfigurationRemovesAllAnnotations() {
-        assertEquals(
-                List.of("b();"),
-                preprocess(new Assignment("A", false, "B", true), "//#if A", "a();", "//#elif B", "b();", "//#endif"));
-    }
-
-    @Test
-    public void inclusionsForPartialConfiguration() {
-        assertEquals(
-                List.of(NEVER, ALWAYS, NEVER, NEVER, NEVER, NEVER, SOMETIMES, NEVER),
-                inclusions(
-                        new Assignment("A", true),
-                        "//#if A || B",
-                        "a();",
-                        "//#else",
-                        "b();",
-                        "//#endif",
-                        "//#if A && B",
-                        "c();",
-                        "//#endif"));
-    }
-
-    @Test
-    public void inclusionsForNestedAndElifAnnotations() {
-        assertEquals(
-                List.of(NEVER, NEVER, NEVER, NEVER, NEVER, NEVER, SOMETIMES, NEVER, NEVER, ALWAYS),
-                inclusions(
-                        new Assignment("A", false),
-                        "//#if A",
-                        "//#if B",
-                        "a();",
-                        "//#endif",
-                        "//#elif B",
-                        "//#if C",
-                        "b();",
-                        "//#endif",
-                        "//#endif",
-                        "c();"));
-    }
-
-    private static List<Inclusion> inclusions(Assignment assignment, String... lines) {
-        return new Preprocessor("//#", JavaSymbols.INSTANCE).computeInclusions(Stream.of(lines), assignment);
-    }
-
-    private static List<String> preprocess(Assignment assignment, String... lines) {
-        return new Preprocessor("//#", JavaSymbols.INSTANCE)
-                .preprocessPartially(Stream.of(lines), assignment)
-                .collect(Collectors.toList());
     }
 
     private static List<String> unknownFeatures(String... lines) {
