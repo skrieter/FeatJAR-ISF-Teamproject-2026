@@ -43,7 +43,8 @@ import java.util.stream.Stream;
 public class PreprocessorAnalyzerCommand extends ACommand {
 
     public static enum Mode {
-        FIND_DEAD_CODE
+        FIND_DEAD_CODE,
+        PRINT_SUPERFLUOUS_ANNOTATIONS
     }
 
     public static final Option<Mode> MODE_OPTION = Options.newEnumOption("mode", Mode.class)
@@ -69,11 +70,14 @@ public class PreprocessorAnalyzerCommand extends ACommand {
 
         Mode mode = optionParser.getResult(MODE_OPTION).orElseThrow();
 
-        Stream<String> stream;
+        Stream<String> stream = null;
         try {
             switch (mode) {
                 case FIND_DEAD_CODE:
                     stream = detectDeadCode(in, charset, preprocessor, optionParser);
+                    break;
+                case PRINT_SUPERFLUOUS_ANNOTATIONS:
+                    stream = printSuperfluousAnnotations(in, charset, preprocessor, optionParser);
                     break;
                 default:
                     return 1;
@@ -110,16 +114,28 @@ public class PreprocessorAnalyzerCommand extends ACommand {
         Path featureModelPath = optionParser.getResult(FEATURE_MODEL_OPTION).orElseThrow();
         IFormula featureModel =
                 IO.load(featureModelPath, FormulaFormats.getInstance()).orElseThrow();
-        return preprocessor.findDeadCode(Files.lines(in, charset), featureModel).stream();
+        try (Stream<String> lines = Files.lines(in, charset)) {
+            return preprocessor.findDeadCode(lines, featureModel).stream();
+        }
+    }
+
+    private Stream<String> printSuperfluousAnnotations(
+            Path in, Charset charset, PreprocessorAnalyzer preprocessor, OptionList optionParser) throws IOException {
+        Path featureModelPath = optionParser.getResult(FEATURE_MODEL_OPTION).orElseThrow();
+        IFormula featureModel =
+                IO.load(featureModelPath, FormulaFormats.getInstance()).orElseThrow();
+        try (Stream<String> lines = Files.lines(in, charset)) {
+            return preprocessor.findSuperfluousAnnotations(lines, featureModel).stream();
+        }
     }
 
     @Override
     public Optional<String> getDescription() {
-        return Optional.of("Analyzes annotations with SAT4J");
+        return Optional.of("Finds dead code and superfluous annotations using SAT4J");
     }
 
     @Override
     public Optional<String> getShortName() {
-        return Optional.of("preprocessor-analyzer");
+        return Optional.of("preprocessor-sat4j");
     }
 }
