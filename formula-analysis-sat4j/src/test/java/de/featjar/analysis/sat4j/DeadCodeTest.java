@@ -30,7 +30,9 @@ import de.featjar.AnalysisTest;
 import de.featjar.analysis.sat4j.PreprocessorAnalyzer.Inclusion;
 import de.featjar.analysis.sat4j.cli.PreprocessorAnalyzerCommand;
 import de.featjar.base.cli.OptionParser;
+import de.featjar.base.io.IO;
 import de.featjar.formula.assignment.Assignment;
+import de.featjar.formula.io.textual.CPPAssignmentFormat;
 import de.featjar.formula.io.textual.JavaSymbols;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -230,6 +232,14 @@ public class DeadCodeTest extends AnalysisTest {
         assertThrows(
                 IllegalArgumentException.class,
                 () -> inclusions(new Assignment("A", 1), "//#if A", "code", "//#endif"));
+    }
+
+    @Test
+    public void undefInConfigurationIsFalse() {
+        CPPAssignmentFormat format = new CPPAssignmentFormat();
+        Assignment assignment = IO.load("#define A\n#undef B\n", format).orElseThrow();
+        assertEquals(List.of(NEVER, NEVER, NEVER), inclusions(assignment, "//#if A && B", "code", "//#endif"));
+        assertEquals("#define A\n#undef B", format.serialize(assignment).orElseThrow());
     }
 
     @Test
