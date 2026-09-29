@@ -34,11 +34,22 @@ export class FeatureNodeView extends RectangularNodeView {
 
         const isMandatory = node.cssClasses?.includes('feature-mandatory') || false;
         const isOptional = node.cssClasses?.includes('feature-optional') || false;
-        // const isMultiple = node.cssClasses?.includes('feature-multiple') || false;
+        const isMultiple = node.cssClasses?.includes('feature-multiple') || false;
 
         const isConstraint = node.cssClasses?.includes('constraint-node') || false;
         const customColor =
             typeof (node as GNodeWithArgs).args?.color === 'string' ? ((node as GNodeWithArgs).args!.color as string) : undefined;
+        // Feature cardinality (e.g. "2..5"), only shown for features that can be
+        // chosen more than once — mandatory/optional are already conveyed by the
+        // circle markers below, so repeating "1..1"/"0..1" there would be redundant.
+        const lowerBound =
+            typeof (node as GNodeWithArgs).args?.lowerBound === 'number' ? ((node as GNodeWithArgs).args!.lowerBound as number) : undefined;
+        const upperBound =
+            typeof (node as GNodeWithArgs).args?.upperBound === 'number' ? ((node as GNodeWithArgs).args!.upperBound as number) : undefined;
+        const cardinalityText =
+            isMultiple && lowerBound !== undefined && upperBound !== undefined
+                ? `${lowerBound}..${upperBound === -1 ? '*' : upperBound}`
+                : undefined;
         const showMandatoryMarker = isMandatory && this.hasIncomingEdgeOfType(node, 'edge-mandatory');
         const showOptionalMarker = isOptional && this.hasIncomingEdgeOfType(node, 'edge-optional');
 
@@ -136,7 +147,11 @@ export class FeatureNodeView extends RectangularNodeView {
                 {showMandatoryMarker && <circle cx={width / 2} cy={0} r={5} fill='black' stroke='black' stroke-width={1} />}
 
                 {showOptionalMarker && <circle cx={width / 2} cy={0} r={5} fill='white' stroke='black' stroke-width={1.5} />}
-
+                {cardinalityText && (
+                    <text x={width - 4} y={-6} text-anchor='end' class-feature-cardinality-text={true}>
+                        {cardinalityText}
+                    </text>
+                )}
                 {context.renderChildren(node)}
                 {isCollapsed && this.renderCollapsedBadge(width, height, collapsedCount)}
             </g>

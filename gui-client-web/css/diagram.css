@@ -83,6 +83,13 @@
     fill: black;
 }
 
+/* Feature cardinality (e.g. "2..5"), shown only for features that can be
+   chosen more than once */
+.feature-cardinality-text {
+    font-size: 10px;
+    fill: #555;
+}
+
 /* Constraints */
  .constraint-box rect {
     stroke: none;
