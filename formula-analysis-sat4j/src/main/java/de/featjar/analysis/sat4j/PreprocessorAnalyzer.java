@@ -32,6 +32,7 @@ import de.featjar.formula.computation.ComputeNNFFormula;
 import de.featjar.formula.io.textual.ExpressionSerializer;
 import de.featjar.formula.io.textual.Symbols;
 import de.featjar.formula.structure.IFormula;
+import de.featjar.formula.structure.connective.Not;
 import de.featjar.formula.structure.predicate.False;
 import de.featjar.formula.structure.predicate.True;
 import java.util.ArrayList;
@@ -89,6 +90,35 @@ public class PreprocessorAnalyzer extends Preprocessor {
         return dead;
     }
 
+    /** Returns annotations whose effective condition holds in every valid configuration. */
+    public List<String> findSuperfluousAnnotations(Stream<String> lines, IFormula featureModel) {
+        List<String> lineList = lines.toList();
+        List<IFormula> presence = computePresenceConditions(lineList.stream());
+        BooleanAssignmentList modelClauses = Computations.of(featureModel)
+                .map(ComputeNNFFormula::new)
+                .map(ComputeCNFFormula::new)
+                .map(ComputeBooleanClauseList::new)
+                .compute();
+        List<String> result = new ArrayList<>();
+
+        for (int i = 0; i < lineList.size(); i++) {
+            Matcher matcher = annotationPattern.matcher(lineList.get(i));
+            if (!matcher.matches() || matcher.group(ENDIF_GROUP) != null || i + 1 >= presence.size()) {
+                continue;
+            }
+
+            int nextLine = i + 1;
+            while (nextLine < presence.size() && presence.get(nextLine) == False.INSTANCE) {
+                nextLine++;
+            }
+
+            if (nextLine < presence.size() && !isSatisfiable(modelClauses, new Not(presence.get(nextLine)))) {
+                result.add("Line " + (i + 1) + ": " + lineList.get(i));
+            }
+        }
+        return result;
+    }
+
     /**
      * {@return whether the given line is a presence annotation such as {@code #if},
      * {@code #elif}, {@code #else}, or {@code #endif}}
@@ -113,10 +143,8 @@ public class PreprocessorAnalyzer extends Preprocessor {
      *
      * Uses {@link ComputeSatisfiableSAT4J} with the model's clause list as the base
      * and the presence condition's clause list as an assumed clause list.
-     * The presence condition's clause list is converted using the model's
-     * {@link VariableMap} so that both clause lists share the same variable indices.
-     * This avoids recomputing the CNF of the model for every block and eliminates
-     * the need for remapping.
+     * Both clause lists use a shared {@link VariableMap} that also includes variables
+     * appearing only in the presence condition.
      */
     private static boolean isSatisfiable(BooleanAssignmentList modelClauses, IFormula presenceCondition) {
         if (presenceCondition == True.INSTANCE) {
@@ -127,11 +155,12 @@ public class PreprocessorAnalyzer extends Preprocessor {
         }
 
         IFormula cnfPresence = presenceCondition.toCNF().orElseThrow();
+        VariableMap variableMap = new VariableMap(modelClauses.getVariableMap(), new VariableMap(cnfPresence));
         BooleanAssignmentList presenceClauses = ComputeBooleanClauseList.toBooleanAssignmentList(
-                        cnfPresence, modelClauses.getVariableMap())
+                        cnfPresence, variableMap)
                 .orElseThrow();
 
-        return Computations.of(modelClauses)
+        return Computations.of(modelClauses.remap(variableMap))
                 .map(ComputeSatisfiableSAT4J::new)
                 .set(ComputeSatisfiableSAT4J.ASSUMED_CLAUSE_LIST, presenceClauses)
                 .compute();
