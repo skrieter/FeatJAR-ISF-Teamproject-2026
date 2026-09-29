@@ -55,21 +55,24 @@ public class TrueFalseSimplifier implements ITreeVisitor<IFormula, Void> {
     @Override
     public TraversalAction lastVisit(List<IFormula> path) {
         final IFormula formula = ITreeVisitor.getCurrentNode(path);
-        formula.replaceChildren((child) -> {
-            if (child instanceof And) {
-                return simplifyAnd(child);
-            } else if (child instanceof Or) {
-                return simplifyOr(child);
-            } else if (child instanceof Implies) {
-                return simplifyImplies(child);
-            } else if (child instanceof BiImplies) {
-                return simplifyBiImplies(child);
-            } else if (child instanceof ACardinal) {
-                return simplifyCardinal(child);
-            }
-            return null;
-        });
+        formula.replaceChildren(this::simplify);
         return TraversalAction.CONTINUE;
+    }
+
+    /** Simplifies one child after its descendants, returning null if no replacement is needed. */
+    protected IExpression simplify(IExpression child) {
+        if (child instanceof And) {
+            return simplifyAnd(child);
+        } else if (child instanceof Or) {
+            return simplifyOr(child);
+        } else if (child instanceof Implies) {
+            return simplifyImplies(child);
+        } else if (child instanceof BiImplies) {
+            return simplifyBiImplies(child);
+        } else if (child instanceof ACardinal) {
+            return simplifyCardinal(child);
+        }
+        return null;
     }
 
     public IExpression simplifyAnd(IExpression child) {

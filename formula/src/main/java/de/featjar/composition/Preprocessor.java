@@ -26,6 +26,7 @@ import de.featjar.base.data.Problem.Severity;
 import de.featjar.base.data.Result;
 import de.featjar.base.data.Void;
 import de.featjar.base.io.format.ParseProblem;
+import de.featjar.base.log.Log.Verbosity;
 import de.featjar.base.tree.Trees;
 import de.featjar.base.tree.visitor.ITreeVisitor;
 import de.featjar.formula.assignment.Assignment;
@@ -35,10 +36,12 @@ import de.featjar.formula.io.textual.Symbols;
 import de.featjar.formula.structure.IExpression;
 import de.featjar.formula.structure.IFormula;
 import de.featjar.formula.structure.connective.And;
+import de.featjar.formula.structure.connective.Implies;
 import de.featjar.formula.structure.connective.Not;
 import de.featjar.formula.structure.connective.Or;
 import de.featjar.formula.structure.connective.Reference;
 import de.featjar.formula.structure.predicate.False;
+import de.featjar.formula.structure.predicate.IPredicate;
 import de.featjar.formula.structure.predicate.Literal;
 import de.featjar.formula.structure.predicate.True;
 import de.featjar.formula.structure.term.value.Variable;
@@ -239,14 +242,15 @@ public class Preprocessor {
     private class Filter implements Predicate<String> {
 
         private final boolean keepUndecided;
+        private final Assignment assignment;
 
         private final LinkedList<ConditionalState> conditionals = new LinkedList<>();
-        private final LinkedList<Assignment> assignments = new LinkedList<>();
+        private final LinkedList<BranchAssumptions> assumptions = new LinkedList<>();
 
         private int lineNumber;
 
         public Filter(Assignment assignment, boolean keepUndecided) {
-            assignments.push(assignment);
+            this.assignment = assignment;
             this.keepUndecided = keepUndecided;
         }
 
@@ -265,7 +269,7 @@ public class Preprocessor {
             if (matcher.group(IF_GROUP) != null) {
                 ConditionalState enclosing = conditionals.peek();
                 conditionals.push(
-                        new ConditionalState(enclosing == null || enclosing.branchIncluded, assignments.size()));
+                        new ConditionalState(enclosing == null || enclosing.branchIncluded, assumptions.size()));
                 return enterBranch(matcher, IF_GROUP, IF_CONDITION_GROUP);
             }
             if (conditionals.isEmpty()) {
@@ -279,8 +283,8 @@ public class Preprocessor {
                 return enterBranch(matcher, ELSE_GROUP, null);
             }
             ConditionalState state = conditionals.pop();
-            while (assignments.size() > state.assignmentDepth) {
-                assignments.pop();
+            while (assumptions.size() > state.assumptionDepth) {
+                assumptions.pop();
             }
             return state.keepEndif ? line : null;
         }
@@ -290,11 +294,7 @@ public class Preprocessor {
          */
         private IFormula parseCondition(String condition) {
             Result<IFormula> parse = annotationParser.parse(condition).map(IFormula.class::cast);
-            if (parse.isPresent()) {
-                return parse.get();
-            }
-            FeatJAR.log().warning("Line %d: could not parse annotation condition: %s", lineNumber, condition);
-            return null;
+            return parse.orElseLog(Verbosity.WARNING);
         }
 
         /**
@@ -310,8 +310,8 @@ public class Preprocessor {
             ConditionalState state = conditionals.peek();
             state.branchIncluded = false;
             if (state.previousCondition != null) {
-                assignments.pop();
-                assignments.push(Trees.traverse(state.previousCondition, new ImpliedAssignments(false))
+                assumptions.pop();
+                assumptions.push(Trees.traverse(state.previousCondition, new BranchAssumptions(false))
                         .orElseThrow());
                 state.previousCondition = null;
             }
@@ -322,7 +322,9 @@ public class Preprocessor {
             IFormula condition = conditionString == null ? True.INSTANCE : parseCondition(conditionString);
             if (condition != null) {
                 Reference reference = new Reference(condition);
-                Trees.traverse(reference, new ConditionSimplifier(assignments)).orElseThrow();
+                Trees.traverse(reference, new ConditionSubstitution(assignment, assumptions))
+                        .orElseThrow();
+                Trees.traverse(reference, new ConditionSimplifier()).orElseThrow();
                 condition = reference.getExpression();
                 if (condition instanceof False) {
                     return null;
@@ -343,8 +345,8 @@ public class Preprocessor {
             }
             state.branchIncluded = true;
             if (condition != null) {
-                assignments.push(
-                        Trees.traverse(condition, new ImpliedAssignments(true)).orElseThrow());
+                assumptions.push(
+                        Trees.traverse(condition, new BranchAssumptions(true)).orElseThrow());
                 state.previousCondition = condition;
                 ExpressionSerializer serializer = new ExpressionSerializer();
                 serializer.setSymbols(annotationParser.getSymbols());
@@ -374,27 +376,29 @@ public class Preprocessor {
         private boolean keepEndif;
 
         /** Stack depth to restore at the matching endif. */
-        private final int assignmentDepth;
+        private final int assumptionDepth;
 
         /** Condition assumed true in the current branch and false in subsequent branches. */
         private IFormula previousCondition;
 
-        private ConditionalState(boolean enclosingBranchIncluded, int assignmentDepth) {
+        private ConditionalState(boolean enclosingBranchIncluded, int assumptionDepth) {
             this.enclosingBranchIncluded = enclosingBranchIncluded;
-            this.assignmentDepth = assignmentDepth;
+            this.assumptionDepth = assumptionDepth;
         }
     }
 
     /**
-     * Substitutes known literals and simplifies Boolean conditions.
+     * Substitutes assigned literals and conditions implied by the current branch.
      * Expects the root to be a {@link Reference}, such that the root expression can be replaced, too.
      */
-    private static final class ConditionSimplifier extends TrueFalseSimplifier {
+    private static final class ConditionSubstitution implements ITreeVisitor<IFormula, Void> {
 
-        private final List<Assignment> assignments;
+        private final Assignment assignment;
+        private final List<BranchAssumptions> assumptions;
 
-        private ConditionSimplifier(List<Assignment> assignments) {
-            this.assignments = assignments;
+        private ConditionSubstitution(Assignment assignment, List<BranchAssumptions> assumptions) {
+            this.assignment = assignment;
+            this.assumptions = assumptions;
         }
 
         @Override
@@ -403,53 +407,109 @@ public class Preprocessor {
         }
 
         @Override
-        public TraversalAction lastVisit(List<IFormula> path) {
-            super.lastVisit(path);
-            ITreeVisitor.getCurrentNode(path).replaceChildren(this::reduce);
+        public TraversalAction firstVisit(List<IFormula> path) {
+            IFormula formula = ITreeVisitor.getCurrentNode(path);
+            if (formula instanceof IPredicate) {
+                return TraversalAction.SKIP_CHILDREN;
+            }
+            // Match entire conditions before substitutions change their children.
+            formula.replaceChildren(this::substitute);
             return TraversalAction.CONTINUE;
         }
 
-        private IExpression reduce(IExpression expression) {
+        private IExpression substitute(IExpression expression) {
+            for (BranchAssumptions branch : assumptions) {
+                if (branch.trueConditions.contains(expression)) {
+                    return True.INSTANCE;
+                }
+                if (branch.falseConditions.contains(expression)) {
+                    return False.INSTANCE;
+                }
+            }
             if (expression instanceof Literal) {
                 Literal literal = (Literal) expression;
-                for (Assignment assignment : assignments) {
-                    Object value =
-                            assignment.getValue(literal.getVariable().getName()).orElse(null);
+                String variable = literal.getVariable().getName();
+                for (BranchAssumptions branch : assumptions) {
+                    Object value = branch.values.get(variable);
                     if (value instanceof Boolean) {
                         return literal.isPositive() == (Boolean) value ? True.INSTANCE : False.INSTANCE;
                     }
                 }
-            } else if (expression instanceof Not) {
+                Object value = assignment.getValue(variable).orElse(null);
+                if (value instanceof Boolean) {
+                    return literal.isPositive() == (Boolean) value ? True.INSTANCE : False.INSTANCE;
+                }
+            }
+            return null;
+        }
+
+        @Override
+        public Result<Void> getResult() {
+            return Result.ofVoid();
+        }
+    }
+
+    /** Combines constant propagation with negation and single-child simplification in one bottom-up pass. */
+    private static final class ConditionSimplifier extends TrueFalseSimplifier {
+
+        @Override
+        protected IExpression simplify(IExpression expression) {
+            IExpression simplified = super.simplify(expression);
+            if (simplified != null) {
+                expression = simplified;
+            }
+            if (expression instanceof Not) {
                 IExpression child = ((Not) expression).getExpression();
                 if (child instanceof True || child instanceof False) {
                     return child instanceof True ? False.INSTANCE : True.INSTANCE;
                 }
+                if (child instanceof Not) {
+                    return ((Not) child).getExpression();
+                }
             } else if ((expression instanceof And || expression instanceof Or) && expression.getChildrenCount() == 1) {
                 return expression.getFirstChild().get();
             }
-            return null;
+            return simplified;
         }
     }
 
-    /** Collects only variable values directly implied by a condition's truth value. */
-    private static final class ImpliedAssignments implements ITreeVisitor<IFormula, Assignment> {
+    /** Collects variable values and compound conditions directly implied by a branch's truth value. */
+    private static final class BranchAssumptions implements ITreeVisitor<IFormula, BranchAssumptions> {
 
         private final LinkedHashMap<String, Object> values = new LinkedHashMap<>();
-        private boolean value;
+        private final List<IFormula> trueConditions = new ArrayList<>();
+        private final List<IFormula> falseConditions = new ArrayList<>();
+        private final LinkedList<Boolean> truthValues = new LinkedList<>();
+        private final boolean branchValue;
 
-        private ImpliedAssignments(boolean value) {
-            this.value = value;
+        private BranchAssumptions(boolean branchValue) {
+            this.branchValue = branchValue;
         }
 
         @Override
         public TraversalAction firstVisit(List<IFormula> path) {
             IFormula formula = ITreeVisitor.getCurrentNode(path);
-            if (formula instanceof Not) {
+            boolean value = truthValues.isEmpty() ? branchValue : truthValues.peek();
+            IFormula parent = ITreeVisitor.getParentNode(path).orElse(null);
+            if (parent instanceof Not) {
                 value = !value;
+            } else if (parent instanceof Implies) {
+                // Only a false implication determines its operands: antecedent true, consequent false.
+                value = formula == parent.getFirstChild().orElseThrow();
+            }
+            truthValues.push(value);
+            (value ? trueConditions : falseConditions).add(formula);
+            if (formula instanceof Not) {
                 return TraversalAction.CONTINUE;
             }
-            if (value ? formula instanceof And : formula instanceof Or) {
-                return TraversalAction.CONTINUE;
+            if (formula instanceof And) {
+                return value ? TraversalAction.CONTINUE : TraversalAction.SKIP_CHILDREN;
+            }
+            if (formula instanceof Or) {
+                return value ? TraversalAction.SKIP_CHILDREN : TraversalAction.CONTINUE;
+            }
+            if (formula instanceof Implies) {
+                return value ? TraversalAction.SKIP_CHILDREN : TraversalAction.CONTINUE;
             }
             if (formula instanceof Literal) {
                 Literal literal = (Literal) formula;
@@ -460,15 +520,13 @@ public class Preprocessor {
 
         @Override
         public TraversalAction lastVisit(List<IFormula> path) {
-            if (ITreeVisitor.getCurrentNode(path) instanceof Not) {
-                value = !value;
-            }
+            truthValues.pop();
             return TraversalAction.CONTINUE;
         }
 
         @Override
-        public Result<Assignment> getResult() {
-            return Result.of(new Assignment(values));
+        public Result<BranchAssumptions> getResult() {
+            return Result.of(this);
         }
     }
 

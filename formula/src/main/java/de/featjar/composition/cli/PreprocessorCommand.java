@@ -38,11 +38,13 @@ import de.featjar.formula.io.textual.JavaSymbols;
 import de.featjar.formula.structure.IFormula;
 import java.io.BufferedWriter;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Optional;
@@ -126,13 +128,14 @@ public class PreprocessorCommand extends ACommand {
 
         Mode mode = optionParser.getResult(MODE_OPTION).orElseThrow();
 
-        Stream<String> stream = null;
-        try {
+        try (Stream<String> lines = Files.lines(in, charset)) {
+            Stream<String> output;
             switch (mode) {
                 case CHECK_STRUCTURE:
-                    return checkStructure(in, charset, preprocessor);
+                    return checkStructure(lines, preprocessor);
                 case PROCESS:
-                    stream = preprocess(
+                    output = preprocess(
+                            lines,
                             in,
                             optionParser.getResult(CONFIGURATION_OPTION).orElseThrow(),
                             optionParser.getResult(MISSING_VARIABLES_OPTION).orElseThrow(),
@@ -141,64 +144,51 @@ public class PreprocessorCommand extends ACommand {
                             preprocessor);
                     break;
                 case PRINT_VARIABLES:
-                    stream = printVariableNames(in, charset, preprocessor);
+                    output = printVariableNames(lines, preprocessor);
                     break;
                 case PRINT_ANNOTATIONS:
-                    stream = printAnnotations(in, charset, preprocessor);
+                    output = printAnnotations(lines, preprocessor);
                     break;
                 case PRINT_PRESENCE_CONDITIONS:
-                    stream = printPresenceConditions(in, charset, preprocessor);
+                    output = printPresenceConditions(lines, preprocessor);
                     break;
                 case CHECK_SYNTAX:
-                    stream = detectInvalidSyntax(in, charset, preprocessor);
+                    output = detectInvalidSyntax(lines, preprocessor);
                     break;
                 case FIND_UNKNOWN_FEATURES:
-                    stream = findUnknownFeatures(
-                            in, optionParser.getResult(FEATURE_MODEL_OPTION).orElseThrow(), charset, preprocessor);
+                    output = findUnknownFeatures(
+                            lines, optionParser.getResult(FEATURE_MODEL_OPTION).orElseThrow(), preprocessor);
                     break;
                 default:
                     return 1;
             }
-        } catch (IOException e) {
-            FeatJAR.log().error(e);
-            return 1;
-        }
-
-        try (Stream<String> output = stream) {
             if (out != null) {
                 try (BufferedWriter writer = Files.newBufferedWriter(
                         out, charset, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
-                    output.forEach(line -> {
-                        try {
-                            writer.write(line);
-                            writer.newLine();
-                            writer.flush();
-                        } catch (IOException e) {
-                            FeatJAR.log().error(e);
-                        }
-                    });
+                    Iterator<String> iterator = output.iterator();
+                    while (iterator.hasNext()) {
+                        writer.write(iterator.next());
+                        writer.newLine();
+                    }
                 }
             } else {
                 output.forEach(FeatJAR.log()::plainMessage);
             }
-        } catch (IOException | IllegalArgumentException e) {
+        } catch (IOException | UncheckedIOException | IllegalArgumentException e) {
             FeatJAR.log().error(e);
             return 1;
         }
         return 0;
     }
 
-    private int checkStructure(Path file, Charset charset, Preprocessor preprocessor) throws IOException {
-        List<Problem> problems;
-        try (Stream<String> lines = Files.lines(file, charset)) {
-            problems = preprocessor.checkStructure(lines);
-        }
-
+    private int checkStructure(Stream<String> lines, Preprocessor preprocessor) {
+        List<Problem> problems = preprocessor.checkStructure(lines);
         FeatJAR.log().problems(problems);
         return (problems.isEmpty() ? 0 : 1);
     }
 
     private Stream<String> preprocess(
+            Stream<String> lines,
             Path in,
             Path assignmentPath,
             MissingVariables missingVariables,
@@ -212,32 +202,21 @@ public class PreprocessorCommand extends ACommand {
             return Stream.empty();
         }
 
-        final Assignment assignment;
-        switch (missingVariables) {
-            case FALSE:
+        Assignment assignment = parsedAssignment.get();
+        if (missingVariables != MissingVariables.IGNORE) {
+            try (Stream<String> variableLines = Files.lines(in, charset)) {
                 assignment = addMissingVariablesToAssignment(
-                        parsedAssignment.get(),
-                        preprocessor.extractVariableNames(Files.lines(in, charset)),
-                        Boolean.FALSE);
-                break;
-            case IGNORE:
-                assignment = parsedAssignment.get();
-                break;
-            case TRUE:
-                assignment = addMissingVariablesToAssignment(
-                        parsedAssignment.get(),
-                        preprocessor.extractVariableNames(Files.lines(in, charset)),
-                        Boolean.TRUE);
-                break;
-            default:
-                throw new IllegalStateException(String.valueOf(missingVariables));
+                        assignment,
+                        preprocessor.extractVariableNames(variableLines),
+                        missingVariables == MissingVariables.TRUE);
+            }
         }
 
-        return preprocessor.preprocess(Files.lines(in, charset), assignment, allowPartial);
+        return preprocessor.preprocess(lines, assignment, allowPartial);
     }
 
     private Assignment addMissingVariablesToAssignment(
-            Assignment orgAssignment, List<String> extractVariableNames, Object value) throws IOException {
+            Assignment orgAssignment, List<String> extractVariableNames, Object value) {
         LinkedHashMap<String, Object> variableValuePairs = new LinkedHashMap<>(orgAssignment.getAll());
         for (String variableName : extractVariableNames) {
             if (!variableValuePairs.containsKey(variableName)) {
@@ -247,35 +226,33 @@ public class PreprocessorCommand extends ACommand {
         return new Assignment(variableValuePairs);
     }
 
-    private Stream<String> printVariableNames(Path in, Charset charset, Preprocessor preprocessor) throws IOException {
-        return preprocessor.extractVariableNames(Files.lines(in, charset)).stream();
+    private Stream<String> printVariableNames(Stream<String> lines, Preprocessor preprocessor) {
+        return preprocessor.extractVariableNames(lines).stream();
     }
 
-    private Stream<String> printAnnotations(Path in, Charset charset, Preprocessor preprocessor) throws IOException {
-        return preprocessor.extractAnnotations(Files.lines(in, charset)).stream();
+    private Stream<String> printAnnotations(Stream<String> lines, Preprocessor preprocessor) {
+        return preprocessor.extractAnnotations(lines).stream();
     }
 
-    private Stream<String> printPresenceConditions(Path in, Charset charset, Preprocessor preprocessor)
-            throws IOException {
+    private Stream<String> printPresenceConditions(Stream<String> lines, Preprocessor preprocessor) {
         ExpressionSerializer serializer = new ExpressionSerializer();
         serializer.setSymbols(JavaSymbols.INSTANCE);
-        return preprocessor.computePresenceConditions(Files.lines(in, charset)).stream()
+        return preprocessor.computePresenceConditions(lines).stream()
                 .map(formula -> Trees.traverse(formula, serializer).orElseThrow());
     }
 
-    private Stream<String> detectInvalidSyntax(Path in, Charset charset, Preprocessor preprocessor) throws IOException {
-        return preprocessor.checkSyntax(Files.lines(in, charset)).stream()
+    private Stream<String> detectInvalidSyntax(Stream<String> lines, Preprocessor preprocessor) {
+        return preprocessor.checkSyntax(lines).stream()
                 .map(problem -> String.format("Line %d: %s", problem.getLineNumber(), problem.getMessage()));
     }
 
-    private Stream<String> findUnknownFeatures(
-            Path in, Path featureModelPath, Charset charset, Preprocessor preprocessor) throws IOException {
+    private Stream<String> findUnknownFeatures(Stream<String> lines, Path featureModelPath, Preprocessor preprocessor) {
         Result<IFormula> featureModel = IO.load(featureModelPath, FormulaFormats.getInstance());
         if (featureModel.isEmpty()) {
             FeatJAR.log().problems(featureModel);
             return Stream.empty();
         }
-        return preprocessor.findUnknownFeatures(Files.lines(in, charset), featureModel.get()).stream()
+        return preprocessor.findUnknownFeatures(lines, featureModel.get()).stream()
                 .map(problem -> String.format("line %d: %s", problem.getLineNumber(), problem.getMessage()));
     }
 

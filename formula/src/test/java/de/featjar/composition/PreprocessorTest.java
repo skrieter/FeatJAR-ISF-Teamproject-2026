@@ -23,6 +23,7 @@ package de.featjar.composition;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mockStatic;
 
 import de.featjar.Common;
 import de.featjar.base.FeatJAR;
@@ -35,17 +36,23 @@ import de.featjar.composition.cli.PreprocessorCommand;
 import de.featjar.formula.assignment.Assignment;
 import de.featjar.formula.io.textual.ExpressionSerializer;
 import de.featjar.formula.io.textual.JavaSymbols;
+import de.featjar.formula.io.textual.ShortSymbols;
+import de.featjar.formula.structure.IExpression;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.MockedStatic;
 
 /***
  * added the unit test
@@ -508,17 +515,9 @@ public class PreprocessorTest extends Common {
     }
 
     @Test
-    public void partialConfigurationKeepsConditionsWithoutImpliedVariableValues() {
+    public void partialConfigurationRemovesAnnotationsImpliedByTheirContext() {
         assertEquals(
-                List.of(
-                        "//#if A || B",
-                        "//#if A || B",
-                        "a();",
-                        "//#endif",
-                        "//#if !(A || B) || C",
-                        "c();",
-                        "//#endif",
-                        "//#endif"),
+                List.of("//#if A || B", "a();", "//#if C", "c();", "//#endif", "//#endif"),
                 preprocess(
                         new Assignment(),
                         "//#if A || B",
@@ -531,6 +530,131 @@ public class PreprocessorTest extends Common {
                         "//#elif A || B",
                         "b();",
                         "//#endif"));
+    }
+
+    @Test
+    public void partialConfigurationRestoresCompoundAssumptionsAcrossBranchesAndBlocks() {
+        assertEquals(
+                List.of("//#if A && B", "a();", "//#else", "b();", "//#endif", "//#if A && B", "c();", "//#endif"),
+                preprocess(
+                        new Assignment(),
+                        "//#if A && B",
+                        "a();",
+                        "//#elif A && B",
+                        "unreachable();",
+                        "//#else",
+                        "//#if !(A && B)",
+                        "b();",
+                        "//#endif",
+                        "//#endif",
+                        "//#if A && B",
+                        "c();",
+                        "//#endif"));
+    }
+
+    @Test
+    public void partialConfigurationUsesCompoundConditionsImpliedByConjunctions() {
+        assertEquals(
+                List.of("//#if A && (B || C)", "a();", "//#endif"),
+                preprocess(new Assignment(), "//#if A && (B || C)", "//#if B || C", "a();", "//#endif", "//#endif"));
+    }
+
+    @Test
+    public void partialConfigurationInfersOperandsOnlyFromFalseImplications() {
+        Preprocessor preprocessor = new Preprocessor("//#", ShortSymbols.INSTANCE);
+        assertEquals(
+                List.of("//#if A => B", "//#if A", "a();", "//#endif", "//#else", "b();", "//#endif"),
+                preprocessor
+                        .preprocess(
+                                Stream.of(
+                                        "//#if A => B",
+                                        "//#if A",
+                                        "a();",
+                                        "//#endif",
+                                        "//#elif A => B",
+                                        "unreachable();",
+                                        "//#else",
+                                        "//#if A & -B",
+                                        "b();",
+                                        "//#endif",
+                                        "//#endif"),
+                                new Assignment(),
+                                true)
+                        .collect(Collectors.toList()));
+        assertEquals(
+                List.of("//#if -(A | B => C & D)", "c();", "//#endif"),
+                preprocessor
+                        .preprocess(
+                                Stream.of(
+                                        "//#if -((A | B) => (C & D))",
+                                        "//#if (A | B) & -(C & D)",
+                                        "c();",
+                                        "//#endif",
+                                        "//#endif"),
+                                new Assignment(),
+                                true)
+                        .collect(Collectors.toList()));
+    }
+
+    @Test
+    public void partialConfigurationPreservesEveryCompletionForBooleanOperators() {
+        Preprocessor preprocessor = new Preprocessor("//#", ShortSymbols.INSTANCE);
+        ExpressionParser parser = new ExpressionParser();
+        parser.setSymbols(ShortSymbols.INSTANCE);
+        List<String> conditions = List.of(
+                "A & B",
+                "A | B",
+                "-(A | -B)",
+                "A => B",
+                "A <=> B",
+                "-(A => B)",
+                "-(A <=> B)",
+                "(A | B) => (A & B)",
+                "(A & B) | A");
+        for (String outer : conditions) {
+            IExpression outerFormula = parser.parse(outer).orElseThrow();
+            for (String inner : conditions) {
+                IExpression innerFormula = parser.parse(inner).orElseThrow();
+                List<String> source = List.of(
+                        "//#if " + outer,
+                        "//#if " + inner,
+                        "both();",
+                        "//#else",
+                        "outer();",
+                        "//#endif",
+                        "//#elif " + inner,
+                        "inner();",
+                        "//#else",
+                        "neither();",
+                        "//#endif");
+                for (Assignment partial :
+                        List.of(new Assignment(), new Assignment("A", true), new Assignment("A", false))) {
+                    List<String> output = preprocessor
+                            .preprocess(source.stream(), partial, true)
+                            .toList();
+                    for (boolean a : List.of(false, true)) {
+                        if (partial.getValue("A").isPresent()
+                                && !partial.getValue("A").get().equals(a)) {
+                            continue;
+                        }
+                        for (boolean b : List.of(false, true)) {
+                            Assignment complete = new Assignment("A", a, "B", b);
+                            boolean outerValue =
+                                    (Boolean) outerFormula.evaluate(complete).orElseThrow();
+                            boolean innerValue =
+                                    (Boolean) innerFormula.evaluate(complete).orElseThrow();
+                            String expected = outerValue
+                                    ? (innerValue ? "both();" : "outer();")
+                                    : (innerValue ? "inner();" : "neither();");
+                            assertEquals(
+                                    List.of(expected),
+                                    preprocess(preprocessor, output, complete),
+                                    outer + " / " + inner + " / A=" + a + ", B=" + b + " / " + output);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     @Test
@@ -635,6 +759,76 @@ public class PreprocessorTest extends Common {
     }
 
     @Test
+    public void commandClosesInputStreamsInEveryMode(@TempDir Path directory) throws IOException {
+        Path input = Files.write(directory.resolve("input.java"), List.of("#if A", "a();", "#endif"));
+        Path configuration = Files.writeString(directory.resolve("config.h"), "#define A\n");
+        Path featureModel = Files.writeString(directory.resolve("model.dimacs"), "p cnf 1 1\n1 0\n");
+        Path output = directory.resolve("output.txt");
+        for (PreprocessorCommand.Mode mode : PreprocessorCommand.Mode.values()) {
+            for (PreprocessorCommand.MissingVariables missing : mode == PreprocessorCommand.Mode.PROCESS
+                    ? List.of(PreprocessorCommand.MissingVariables.values())
+                    : List.of(PreprocessorCommand.MissingVariables.IGNORE)) {
+                PreprocessorCommand command = new PreprocessorCommand();
+                OptionList options = new OptionList(
+                        command.getOptions(),
+                        List.of(
+                                "--input", input.toString(),
+                                "--output", output.toString(),
+                                "--configuration", configuration.toString(),
+                                "--feature-model", featureModel.toString(),
+                                "--mode", mode.name(),
+                                "--missing-variables", missing.name()));
+                assertTrue(options.parseArguments().isEmpty());
+                AtomicInteger opened = new AtomicInteger();
+                AtomicInteger closed = new AtomicInteger();
+                try (MockedStatic<Files> files = mockInputLines(input, () -> {
+                    opened.incrementAndGet();
+                    return Stream.of("#if A", "a();", "#endif").onClose(closed::incrementAndGet);
+                })) {
+                    assertEquals(0, command.run(options), mode.name());
+                }
+                assertEquals(missing == PreprocessorCommand.MissingVariables.IGNORE ? 1 : 2, opened.get());
+                assertEquals(opened.get(), closed.get(), mode + " / " + missing);
+            }
+        }
+    }
+
+    @Test
+    public void commandClosesInputStreamsOnFailures(@TempDir Path directory) throws IOException {
+        Path input = Files.writeString(directory.resolve("input.java"), "");
+        Path configuration = Files.writeString(directory.resolve("config.h"), "#define A\n");
+        for (String failure : List.of("read", "write", "undecided")) {
+            for (PreprocessorCommand.Mode mode :
+                    List.of(PreprocessorCommand.Mode.PROCESS, PreprocessorCommand.Mode.PRINT_VARIABLES)) {
+                PreprocessorCommand command = new PreprocessorCommand();
+                OptionList options = new OptionList(
+                        command.getOptions(),
+                        List.of(
+                                "--input", input.toString(),
+                                "--output",
+                                        (failure.equals("write") ? directory : directory.resolve("output.txt"))
+                                                .toString(),
+                                "--configuration", configuration.toString(),
+                                "--mode", mode.name()));
+                assertTrue(options.parseArguments().isEmpty());
+                AtomicInteger closed = new AtomicInteger();
+                try (MockedStatic<Files> files = mockInputLines(input, () -> {
+                    Stream<String> lines = failure.equals("read")
+                            ? Stream.generate(() -> {
+                                throw new UncheckedIOException(new IOException("input failure"));
+                            })
+                            : Stream.of("#if B", "b();", "#endif");
+                    return lines.onClose(closed::incrementAndGet);
+                })) {
+                    int expected = failure.equals("undecided") && mode != PreprocessorCommand.Mode.PROCESS ? 0 : 1;
+                    assertEquals(expected, command.run(options), failure + " / " + mode);
+                }
+                assertEquals(1, closed.get(), failure + " / " + mode);
+            }
+        }
+    }
+
+    @Test
     public void partialConfigurationKeepsUnparsableAnnotations() {
         assertEquals(
                 List.of("//#if a > 0", "a();", "//#else", "b();", "//#endif"),
@@ -665,6 +859,15 @@ public class PreprocessorTest extends Common {
                                 Stream.of("//#if A", "a();", "//#elif B", "b();", "//#endif", "c();"),
                                 new Assignment("A", true, "B", false))
                         .collect(Collectors.toList()));
+    }
+
+    private static MockedStatic<Files> mockInputLines(Path input, Supplier<Stream<String>> lines) {
+        return mockStatic(Files.class, invocation -> {
+            if (invocation.getMethod().getName().equals("lines") && input.equals(invocation.getArgument(0))) {
+                return lines.get();
+            }
+            return invocation.callRealMethod();
+        });
     }
 
     private static List<String> preprocess(Assignment assignment, String... lines) {

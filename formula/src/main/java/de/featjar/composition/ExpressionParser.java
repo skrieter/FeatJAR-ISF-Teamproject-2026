@@ -146,7 +146,7 @@ public class ExpressionParser {
     }
 
     private IExpression parseSubExpression(List<Token> tokenList, int position) throws ParseException {
-        IExpression expression = parseSubExpression(tokenList.listIterator());
+        IExpression expression = parseSubExpression(tokenList.listIterator(), Integer.MIN_VALUE);
         if (expression == null) {
             throw new ParseException("Missing condition.", 1, position);
         }
@@ -154,7 +154,7 @@ public class ExpressionParser {
     }
 
     @SuppressWarnings("unchecked")
-    private IExpression parseSubExpression(ListIterator<Token> iterator) throws ParseException {
+    private IExpression parseSubExpression(ListIterator<Token> iterator, int minimumPriority) throws ParseException {
         IExpression expression = null;
         while (iterator.hasNext()) {
             Token token = iterator.next();
@@ -168,6 +168,11 @@ public class ExpressionParser {
                     break;
                 case OPERATOR:
                     Class<? extends IExpression> value = (Class<? extends IExpression>) token.value;
+                    if ((value == And.class || value == Or.class || value == Implies.class || value == BiImplies.class)
+                            && symbols.getPriority(value).orElseThrow() < minimumPriority) {
+                        iterator.previous();
+                        return expression;
+                    }
                     if (value == Literal.class || value == Not.class) {
                         checkNoOperandBefore(expression, token);
                         expression = parseOperand(token, iterator);
@@ -212,8 +217,12 @@ public class ExpressionParser {
         return (IFormula) expression;
     }
 
+    @SuppressWarnings("unchecked")
     private IFormula rightOperand(Token operator, ListIterator<Token> iterator) throws ParseException {
-        IExpression right = iterator.hasNext() ? parseSubExpression(iterator) : null;
+        int priority = symbols.getPriority((Class<? extends IExpression>) operator.value)
+                .orElseThrow();
+        // Leave lower-priority operators for the enclosing expression, matching the serializer's precedence.
+        IExpression right = iterator.hasNext() ? parseSubExpression(iterator, priority) : null;
         if (!(right instanceof IFormula)) {
             throw missingOperand(operator);
         }
