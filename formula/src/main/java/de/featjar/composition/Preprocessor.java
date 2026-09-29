@@ -48,14 +48,12 @@ import de.featjar.formula.structure.term.value.Variable;
 import de.featjar.formula.visitor.TrueFalseSimplifier;
 import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
-import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -239,7 +237,7 @@ public class Preprocessor {
     }
     // -------------------------------------------------------------------------
 
-    private class Filter implements Predicate<String> {
+    private class Filter {
 
         private final boolean keepUndecided;
         private final Assignment assignment;
@@ -252,11 +250,6 @@ public class Preprocessor {
         public Filter(Assignment assignment, boolean keepUndecided) {
             this.assignment = assignment;
             this.keepUndecided = keepUndecided;
-        }
-
-        @Override
-        public boolean test(String line) {
-            return apply(line) != null;
         }
 
         /** Returns the retained or simplified line, or null if it is removed. */
@@ -290,14 +283,6 @@ public class Preprocessor {
         }
 
         /**
-         * {@return the parsed condition, or {@code null} if it cannot be parsed}
-         */
-        private IFormula parseCondition(String condition) {
-            Result<IFormula> parse = annotationParser.parse(condition).map(IFormula.class::cast);
-            return parse.orElseLog(Verbosity.WARNING);
-        }
-
-        /**
          * Enters the next branch of the innermost block.
          * A condition that cannot be parsed is treated like a condition that cannot be decided.
          *
@@ -319,7 +304,12 @@ public class Preprocessor {
                 return null;
             }
             String conditionString = conditionGroup == null ? null : matcher.group(conditionGroup);
-            IFormula condition = conditionString == null ? True.INSTANCE : parseCondition(conditionString);
+            IFormula condition = conditionString == null
+                    ? True.INSTANCE
+                    : annotationParser
+                            .parse(conditionString)
+                            .map(IFormula.class::cast)
+                            .orElseLog(Verbosity.WARNING);
             if (condition != null) {
                 Reference reference = new Reference(condition);
                 Trees.traverse(reference, new ConditionSubstitution(assignment, assumptions))
@@ -428,14 +418,8 @@ public class Preprocessor {
             }
             if (expression instanceof Literal) {
                 Literal literal = (Literal) expression;
-                String variable = literal.getVariable().getName();
-                for (BranchAssumptions branch : assumptions) {
-                    Object value = branch.values.get(variable);
-                    if (value instanceof Boolean) {
-                        return literal.isPositive() == (Boolean) value ? True.INSTANCE : False.INSTANCE;
-                    }
-                }
-                Object value = assignment.getValue(variable).orElse(null);
+                Object value =
+                        assignment.getValue(literal.getVariable().getName()).orElse(null);
                 if (value instanceof Boolean) {
                     return literal.isPositive() == (Boolean) value ? True.INSTANCE : False.INSTANCE;
                 }
@@ -473,10 +457,9 @@ public class Preprocessor {
         }
     }
 
-    /** Collects variable values and compound conditions directly implied by a branch's truth value. */
+    /** Collects the literals and compound conditions directly implied by a branch's truth value. */
     private static final class BranchAssumptions implements ITreeVisitor<IFormula, BranchAssumptions> {
 
-        private final LinkedHashMap<String, Object> values = new LinkedHashMap<>();
         private final List<IFormula> trueConditions = new ArrayList<>();
         private final List<IFormula> falseConditions = new ArrayList<>();
         private final LinkedList<Boolean> truthValues = new LinkedList<>();
@@ -511,10 +494,7 @@ public class Preprocessor {
             if (formula instanceof Implies) {
                 return value ? TraversalAction.SKIP_CHILDREN : TraversalAction.CONTINUE;
             }
-            if (formula instanceof Literal) {
-                Literal literal = (Literal) formula;
-                values.put(literal.getVariable().getName(), value == literal.isPositive());
-            }
+            // Literals are recorded above; the operands of other nodes (e.g., BiImplies) are not determined.
             return TraversalAction.SKIP_CHILDREN;
         }
 
@@ -604,10 +584,9 @@ public class Preprocessor {
      * @throws IllegalArgumentException during consumption if an annotation cannot be decided and keepUndecided is false
      */
     public Stream<String> preprocess(Stream<String> lines, Assignment assignment, boolean keepUndecided) {
-        Filter filter = new Filter(assignment, keepUndecided);
-        return keepUndecided
-                ? lines.sequential().map(filter::apply).filter(Objects::nonNull)
-                : lines.sequential().filter(filter);
+        return lines.sequential()
+                .map(new Filter(assignment, keepUndecided)::apply)
+                .filter(Objects::nonNull);
     }
 
     /**
