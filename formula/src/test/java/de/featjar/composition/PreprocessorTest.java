@@ -27,7 +27,7 @@ import static org.mockito.Mockito.mockStatic;
 
 import de.featjar.Common;
 import de.featjar.base.FeatJAR;
-import de.featjar.base.cli.OptionList;
+import de.featjar.base.cli.OptionParser;
 import de.featjar.base.data.Problem;
 import de.featjar.base.data.Problem.Severity;
 import de.featjar.base.io.format.ParseProblem;
@@ -751,7 +751,7 @@ public class PreprocessorTest extends Common {
             if (allowPartial) {
                 arguments.add("--allow-partial");
             }
-            OptionList options = new OptionList(command.getOptions(), arguments);
+            OptionParser options = new OptionParser(command.getOptions(), arguments);
             assertTrue(options.parseArguments().isEmpty());
             assertEquals(allowPartial ? 0 : 1, command.run(options));
         }
@@ -769,7 +769,7 @@ public class PreprocessorTest extends Common {
                     ? List.of(PreprocessorCommand.MissingVariables.values())
                     : List.of(PreprocessorCommand.MissingVariables.IGNORE)) {
                 PreprocessorCommand command = new PreprocessorCommand();
-                OptionList options = new OptionList(
+                OptionParser options = new OptionParser(
                         command.getOptions(),
                         List.of(
                                 "--input", input.toString(),
@@ -801,7 +801,7 @@ public class PreprocessorTest extends Common {
             for (PreprocessorCommand.Mode mode :
                     List.of(PreprocessorCommand.Mode.PROCESS, PreprocessorCommand.Mode.PRINT_VARIABLES)) {
                 PreprocessorCommand command = new PreprocessorCommand();
-                OptionList options = new OptionList(
+                OptionParser options = new OptionParser(
                         command.getOptions(),
                         List.of(
                                 "--input", input.toString(),
