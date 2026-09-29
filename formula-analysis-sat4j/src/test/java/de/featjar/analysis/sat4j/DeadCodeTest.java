@@ -29,7 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import de.featjar.AnalysisTest;
 import de.featjar.analysis.sat4j.PreprocessorAnalyzer.Inclusion;
 import de.featjar.analysis.sat4j.cli.PreprocessorAnalyzerCommand;
-import de.featjar.base.cli.OptionList;
+import de.featjar.base.cli.OptionParser;
 import de.featjar.formula.assignment.Assignment;
 import de.featjar.formula.io.textual.JavaSymbols;
 import java.io.IOException;
@@ -247,7 +247,7 @@ public class DeadCodeTest extends AnalysisTest {
         Path configuration = Files.writeString(directory.resolve("config.h"), "#define A\n");
         Path output = directory.resolve("output.txt");
         PreprocessorAnalyzerCommand command = new PreprocessorAnalyzerCommand();
-        OptionList options = new OptionList(
+        OptionParser options = new OptionParser(
                 command.getOptions(),
                 "--mode",
                 "PRINT_INCLUSIONS",
