@@ -8,6 +8,7 @@ import {
 
 import { addFeatureBelow } from './create-feature-actions'; // added
 import { ToggleCollapseAction } from './toggle-collapse-action';
+import { SetCollapseStateAction } from './set-collapse-state-action';
 
 interface Entry {
     label: string;
@@ -73,6 +74,9 @@ function buildEntries(id: string, css: string, actionDispatcher: IActionDispatch
             entries.push({ label: 'Expand Subtree', action: ToggleCollapseAction.create(id) });
         } else if (classes.includes('collapsible')) {
             entries.push({ label: 'Collapse Subtree', action: ToggleCollapseAction.create(id) });
+        }
+        if (classes.includes('collapsible')) {
+            entries.push({ label: 'Expand All Below', action: SetCollapseStateAction.create('expandSubtree', undefined, id) });
         }
 
         return entries;

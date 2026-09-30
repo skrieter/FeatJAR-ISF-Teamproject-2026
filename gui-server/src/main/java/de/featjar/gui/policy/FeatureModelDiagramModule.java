@@ -24,6 +24,7 @@ import de.featjar.gui.action.handler.ClientMessageHandler;
 import de.featjar.gui.action.handler.ExitHandler;
 import de.featjar.gui.action.handler.SaveHandler;
 import de.featjar.gui.action.handler.SelectionHandler;
+import de.featjar.gui.action.handler.SetCollapseStateHandler;
 import de.featjar.gui.action.handler.ToggleCollapseHandler;
 import de.featjar.gui.model.FeatureModelGModelFactory;
 import de.featjar.gui.model.FeatureModelLayoutEngine;
@@ -107,6 +108,7 @@ public class FeatureModelDiagramModule extends EMFNotationDiagramModule {
         bindings.add(ExitHandler.class);
         bindings.add(SaveHandler.class);
         bindings.add(ToggleCollapseHandler.class);
+        bindings.add(SetCollapseStateHandler.class);
     }
 
     @Override
