@@ -234,7 +234,7 @@ export function exportXML(uri: vscode.Uri) {
 			'--output',
 			outputPath,
             '--output-format',
-            'XML'
+            'FeatureIDE'
         ]);
 }
 
