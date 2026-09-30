@@ -128,9 +128,7 @@ public class PreprocessorAnalyzerCommand extends ACommand {
 
     private Stream<String> detectDeadCode(
             Path in, Charset charset, PreprocessorAnalyzer preprocessor, OptionParser optionParser) throws IOException {
-        Path featureModelPath = optionParser.getResult(FEATURE_MODEL_OPTION).orElseThrow();
-        IFormula featureModel =
-                IO.load(featureModelPath, FormulaFormats.getInstance()).orElseThrow();
+        IFormula featureModel = loadFeatureModel(optionParser);
         try (Stream<String> lines = Files.lines(in, charset)) {
             return preprocessor.findDeadCode(lines, featureModel).stream();
         }
@@ -141,21 +139,27 @@ public class PreprocessorAnalyzerCommand extends ACommand {
         Path assignmentPath = optionParser.getResult(CONFIGURATION_OPTION).orElseThrow();
         Assignment assignment =
                 IO.load(assignmentPath, new CPPAssignmentFormat()).orElseThrow();
+        IFormula featureModel = loadFeatureModel(optionParser);
         Iterator<PreprocessorAnalyzer.Inclusion> inclusions;
         try (Stream<String> lines = Files.lines(in, charset)) {
-            inclusions = preprocessor.computeInclusions(lines, assignment).iterator();
+            inclusions = preprocessor
+                    .computeInclusions(lines, featureModel, assignment)
+                    .iterator();
         }
         return Files.lines(in, charset).map(line -> String.format("%-9s %s", inclusions.next(), line));
     }
 
     private Stream<String> printSuperfluousAnnotations(
             Path in, Charset charset, PreprocessorAnalyzer preprocessor, OptionParser optionParser) throws IOException {
-        Path featureModelPath = optionParser.getResult(FEATURE_MODEL_OPTION).orElseThrow();
-        IFormula featureModel =
-                IO.load(featureModelPath, FormulaFormats.getInstance()).orElseThrow();
+        IFormula featureModel = loadFeatureModel(optionParser);
         try (Stream<String> lines = Files.lines(in, charset)) {
             return preprocessor.findSuperfluousAnnotations(lines, featureModel).stream();
         }
+    }
+
+    private IFormula loadFeatureModel(OptionParser optionParser) {
+        Path featureModelPath = optionParser.getResult(FEATURE_MODEL_OPTION).orElseThrow();
+        return IO.load(featureModelPath, FormulaFormats.getInstance()).orElseThrow();
     }
 
     @Override

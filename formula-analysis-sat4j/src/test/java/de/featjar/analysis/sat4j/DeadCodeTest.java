@@ -151,6 +151,21 @@ public class DeadCodeTest extends AnalysisTest {
     }
 
     @Test
+    public void inclusionsUseTheFeatureModel() {
+        // Directed excludes its alternative Undirected, and Base is mandatory.
+        assertEquals(
+                List.of(NEVER, NEVER, NEVER, NEVER, ALWAYS, NEVER),
+                inclusions(
+                        new Assignment("Directed", true),
+                        "//#if Undirected",
+                        "a();",
+                        "//#endif",
+                        "//#if Base",
+                        "b();",
+                        "//#endif"));
+    }
+
+    @Test
     public void inclusionsForNestedAndElifAnnotations() {
         assertEquals(
                 List.of(NEVER, NEVER, NEVER, NEVER, NEVER, NEVER, SOMETIMES, NEVER, NEVER, ALWAYS),
@@ -255,6 +270,7 @@ public class DeadCodeTest extends AnalysisTest {
                         "never",
                         "/*end[!A]*/"));
         Path configuration = Files.writeString(directory.resolve("config.h"), "#define A\n");
+        Path featureModel = Files.writeString(directory.resolve("model.dimacs"), "p cnf 1 1\n1 0\n");
         Path output = directory.resolve("output.txt");
         PreprocessorAnalyzerCommand command = new PreprocessorAnalyzerCommand();
         OptionParser options = new OptionParser(
@@ -267,6 +283,8 @@ public class DeadCodeTest extends AnalysisTest {
                 input.toString(),
                 "--configuration",
                 configuration.toString(),
+                "--feature-model",
+                featureModel.toString(),
                 "--output",
                 output.toString());
         assertEquals(List.of(), options.parseArguments());
@@ -284,7 +302,8 @@ public class DeadCodeTest extends AnalysisTest {
     }
 
     private static List<Inclusion> inclusions(Assignment assignment, String... lines) {
-        return new PreprocessorAnalyzer("//#", JavaSymbols.INSTANCE).computeInclusions(Stream.of(lines), assignment);
+        return new PreprocessorAnalyzer("//#", JavaSymbols.INSTANCE)
+                .computeInclusions(Stream.of(lines), loadFormula("GPL/model.xml"), assignment);
     }
 
     private static List<String> dead(String... lines) {

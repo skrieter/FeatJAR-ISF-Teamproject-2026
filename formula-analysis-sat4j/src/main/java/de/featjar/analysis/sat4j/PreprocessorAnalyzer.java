@@ -62,14 +62,15 @@ public class PreprocessorAnalyzer extends Preprocessor {
 
     /**
      * {@return for each line, in order, whether it is always, sometimes, or never included
-     * in a completion of the given partial assignment}
+     * in a valid completion of the given partial assignment}
      * Annotation lines are never included. Classification uses SAT checks for the presence condition
-     * and its negation under the assignment.
+     * and its negation under the feature model and the assignment.
      *
      * @param lines the line stream
+     * @param featureModel the feature model
      * @param assignment the partial Boolean assignment; null values are unassigned
      */
-    public List<Inclusion> computeInclusions(Stream<String> lines, Assignment assignment) {
+    public List<Inclusion> computeInclusions(Stream<String> lines, IFormula featureModel, Assignment assignment) {
         List<IFormula> literals = new ArrayList<>();
         assignment.getAll().forEach((name, value) -> {
             if (value != null) {
@@ -81,15 +82,19 @@ public class PreprocessorAnalyzer extends Preprocessor {
         });
         BooleanAssignmentList assignedClauses = ComputeBooleanClauseList.toBooleanAssignmentList(new And(literals))
                 .orElseThrow();
+        BooleanAssignmentList modelClauses = toClauses(featureModel);
+        VariableMap variableMap = new VariableMap(modelClauses.getVariableMap(), assignedClauses.getVariableMap());
+        BooleanAssignmentList clauses = modelClauses.remap(variableMap);
+        clauses.addAll(assignedClauses.remap(variableMap));
         return computePresenceConditions(lines).stream()
                 .map(condition -> {
                     if (condition == True.INSTANCE) {
                         return Inclusion.ALWAYS;
                     }
-                    if (!isSatisfiable(assignedClauses, condition)) {
+                    if (!isSatisfiable(clauses, condition)) {
                         return Inclusion.NEVER;
                     }
-                    return isSatisfiable(assignedClauses, new Not(condition)) ? Inclusion.SOMETIMES : Inclusion.ALWAYS;
+                    return isSatisfiable(clauses, new Not(condition)) ? Inclusion.SOMETIMES : Inclusion.ALWAYS;
                 })
                 .collect(Collectors.toList());
     }
@@ -107,13 +112,7 @@ public class PreprocessorAnalyzer extends Preprocessor {
         ExpressionSerializer serializer = new ExpressionSerializer();
         serializer.setSymbols(getSymbols());
         List<String> dead = new ArrayList<>();
-
-        // Compute the CNF of the feature model once (ComputeNNFFormula deals with the reference)
-        BooleanAssignmentList modelClauses = Computations.of(featureModel)
-                .map(ComputeNNFFormula::new)
-                .map(ComputeCNFFormula::new)
-                .map(ComputeBooleanClauseList::new)
-                .compute();
+        BooleanAssignmentList modelClauses = toClauses(featureModel);
 
         // A code block is a maximal run of lines between annotations. Annotations are
         // identified with the shared pattern and the named annotation groups so that
@@ -142,11 +141,7 @@ public class PreprocessorAnalyzer extends Preprocessor {
     public List<String> findSuperfluousAnnotations(Stream<String> lines, IFormula featureModel) {
         List<String> lineList = lines.toList();
         List<IFormula> presence = computePresenceConditions(lineList.stream());
-        BooleanAssignmentList modelClauses = Computations.of(featureModel)
-                .map(ComputeNNFFormula::new)
-                .map(ComputeCNFFormula::new)
-                .map(ComputeBooleanClauseList::new)
-                .compute();
+        BooleanAssignmentList modelClauses = toClauses(featureModel);
         List<String> result = new ArrayList<>();
 
         for (int i = 0; i < lineList.size(); i++) {
@@ -184,6 +179,15 @@ public class PreprocessorAnalyzer extends Preprocessor {
                 || matcher.group(ELIF_GROUP) != null
                 || matcher.group(ELSE_GROUP) != null
                 || matcher.group(ENDIF_GROUP) != null;
+    }
+
+    /** {@return the CNF clauses of the given feature model} ComputeNNFFormula deals with the reference. */
+    private static BooleanAssignmentList toClauses(IFormula featureModel) {
+        return Computations.of(featureModel)
+                .map(ComputeNNFFormula::new)
+                .map(ComputeCNFFormula::new)
+                .map(ComputeBooleanClauseList::new)
+                .compute();
     }
 
     /**
