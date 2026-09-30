@@ -59,7 +59,7 @@ export class SessionManagementPanel extends AbstractUIExtension implements IDiag
                 this.actionDispatcher.dispatch(ExitAction.create());
             })
         );
-        containerElement.appendChild(this.createCollapseMenu());
+        this.createCollapseMenus().forEach(menu => containerElement.appendChild(menu));
 
         this.colorButton = this.createButton('btn-set-color', 'Set Color...', () => this.promptAndDispatch());
         this.setColorButtonEnabled(false);
@@ -97,49 +97,58 @@ export class SessionManagementPanel extends AbstractUIExtension implements IDiag
         button.onclick = onClick;
         return button;
     }
-    /**
-     * Builds the "Collapse / Expand" dropdown.
+   
+        /**
+     * Builds the Collapse and Expand entries. Each one opens a small sub-menu on hover.
      */
-    protected createCollapseMenu(): HTMLElement {
-        const select = document.createElement('select');
-        select.id = 'sel-collapse';
-
-        const entries: [string, string][] = [
-            ['', 'Collapse / Expand...'],
-            ['collapseAll', 'Collapse all'],
-            ['collapseAllButRoot', 'Collapse all but root'],
-            ['collapseFromLevel', 'Collapse from level...'],
-            ['expandAll', 'Expand all'],
-            ['expandUpToLevel', 'Expand up to level...']
+    protected createCollapseMenus(): HTMLElement[] {
+        return [
+            this.createSubmenu('Collapse', [
+                ['btn-collapse-all', 'Collapse all', () => this.dispatchCollapse('collapseAll')],
+                ['btn-collapse-all-but-root', 'Collapse all but root', () => this.dispatchCollapse('collapseAllButRoot')],
+                ['btn-collapse-from-level', 'Collapse from level...', () => this.dispatchCollapse('collapseFromLevel', true)]
+            ]),
+            this.createSubmenu('Expand', [
+                ['btn-expand-all', 'Expand all', () => this.dispatchCollapse('expandAll')],
+                ['btn-expand-up-to-level', 'Expand up to level...', () => this.dispatchCollapse('expandUpToLevel', true)]
+            ])
         ];
-        for (const [value, label] of entries) {
-            const option = document.createElement('option');
-            option.value = value;
-            option.textContent = label;
-            select.appendChild(option);
-        }
+    }
 
-        select.onchange = () => {
-            const mode = select.value as CollapseMode;
-            select.value = '';
-            if (!mode) {
-                return;
-            }
-            if (mode === 'collapseFromLevel' || mode === 'expandUpToLevel') {
-                const input = window.prompt('Level (root = 0):', '1');
-                if (input === null) {
-                    return;
-                }
-                const level = Number.parseInt(input, 10);
-                if (Number.isNaN(level) || level < 0) {
-                    return;
-                }
-                this.actionDispatcher.dispatch(SetCollapseStateAction.create(mode, level));
-                return;
-            }
+    /**
+     * Builds one panel entry with a sub-menu that opens on hover.
+     */
+    protected createSubmenu(label: string, entries: [string, string, () => void][]): HTMLElement {
+        const submenu = document.createElement('div');
+        submenu.className = 'session-management-panel-button session-management-panel-submenu';
+        submenu.textContent = `${label} ▸`;
+
+        const list = document.createElement('div');
+        list.className = 'session-management-panel-submenu-list';
+        for (const [id, entryLabel, onClick] of entries) {
+            list.appendChild(this.createButton(id, entryLabel, onClick));
+        }
+        submenu.appendChild(list);
+        return submenu;
+    }
+
+    /**
+     * Sends the collapse action to the server. For the level entries, asks for the level first.
+     */
+    protected dispatchCollapse(mode: CollapseMode, askForLevel = false): void {
+        if (!askForLevel) {
             this.actionDispatcher.dispatch(SetCollapseStateAction.create(mode));
-        };
-        return select;
+            return;
+        }
+        const input = window.prompt('Level (root = 0):', '1');
+        if (input === null) {
+            return;
+        }
+        const level = Number.parseInt(input, 10);
+        if (Number.isNaN(level) || level < 0) {
+            return;
+        }
+        this.actionDispatcher.dispatch(SetCollapseStateAction.create(mode, level));
     }
 
     /*
