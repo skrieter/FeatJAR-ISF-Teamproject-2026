@@ -101,17 +101,17 @@
       "view/item/context": [
     {
         "command": "featjar-extension.checkSatisfiability",
-        "when": "view == uvlFiles"
+        "when": "view == uvlFiles && viewItem == uvlModel"
     },
     {
         "command": "featjar-extension.countConfigurations",
-        "when": "view == uvlFiles"
+        "when": "view == uvlFiles && viewItem == uvlModel"
     },{
         "command": "featjar-extension.coreDeadFeatures",
-        "when": "view == uvlFiles"
+        "when": "view == uvlFiles && viewItem == uvlModel"
     },{
         "command": "featjar-extension.modelTest",
-        "when": "view == uvlFiles"
+        "when": "view == uvlFiles && viewItem == uvlModel"
     },{
         "submenu": "featjar.exportMenu",
         "when": "resourceExtname == .uvl || resourceExtname == .xml || resourceExtname == .dimacs",
