@@ -27,8 +27,7 @@ import org.eclipse.glsp.server.operations.Operation;
  * Carries a drag and drop in the diagram to the server: which node was dragged,
  * which node it was dropped on or next to, and where it goes relative to that
  * node
- * ({@link #BEFORE}, {@link #AFTER} or {@link #INSIDE}).
- *
+ * ({@link Position#before}, {@link Position#after} or {@link Position#inside}).
  * The KIND constant and the field names have to match the client's
  * MoveNodeAction.
  */
@@ -37,7 +36,7 @@ public class MoveNodeOperation extends Operation {
     public static final String KIND = "moveNode";
 
     /** Where the moved node ends up, relative to the target node. */
-    public enum position {
+    public enum Position {
 
         /** The node becomes a sibling in front of the target. */
         before,
@@ -51,7 +50,7 @@ public class MoveNodeOperation extends Operation {
 
     private String elementId;
     private String targetId;
-    private String position;
+    private Position position;
 
     public MoveNodeOperation() {
         super(KIND);
