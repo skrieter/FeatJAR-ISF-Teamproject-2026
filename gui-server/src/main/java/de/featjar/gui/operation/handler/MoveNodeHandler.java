@@ -150,11 +150,17 @@ public class MoveNodeHandler extends EMFOperationHandler<MoveNodeOperation> {
      * @return the destination, or null if this kind of node can not be moved there
      */
     private Destination findDestination(final Identifiable moved, final Identifiable target, final String position) {
-        boolean inside = MoveNodeOperation.INSIDE.equals(position);
-        boolean before = MoveNodeOperation.BEFORE.equals(position);
-        boolean after = MoveNodeOperation.AFTER.equals(position);
-        if (!inside && !before && !after) {
-            return null;
+        boolean inside = false;
+        boolean before = false;
+        boolean after = false;
+
+        switch (position) {
+            case MoveNodeOperation.INSIDE -> inside = true;
+            case MoveNodeOperation.BEFORE -> before = true;
+            case MoveNodeOperation.AFTER -> after = true;
+            default -> {
+                return null;
+            }
         }
 
         if (moved instanceof Feature) {

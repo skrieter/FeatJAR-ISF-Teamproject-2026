@@ -36,14 +36,18 @@ public class MoveNodeOperation extends Operation {
 
     public static final String KIND = "moveNode";
 
-    /** The node becomes a sibling in front of the target. */
-    public static final String BEFORE = "before";
+    /** Where the moved node ends up, relative to the target node. */
+    public enum position {
 
-    /** The node becomes a sibling behind the target. */
-    public static final String AFTER = "after";
+        /** The node becomes a sibling in front of the target. */
+        before,
 
-    /** The node becomes a child of the target. */
-    public static final String INSIDE = "inside";
+        /** The node becomes a sibling behind the target. */
+        after,
+
+        /** The node becomes a child of the target. */
+        inside,
+    }
 
     private String elementId;
     private String targetId;
@@ -61,7 +65,7 @@ public class MoveNodeOperation extends Operation {
         return targetId;
     }
 
-    public String getPosition() {
+    public Position getPosition() {
         return position;
     }
 }
