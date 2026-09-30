@@ -42,14 +42,6 @@ Tick **Show attributes** in the upper left panel to display feature attributes i
 - **Search:** type in the **Search features...** bar at the top to see matching features in a dropdown. Press `Enter` (or click a suggestion) to select and center a match. Press `Enter` again for the next match, `Shift+Enter` for the previous one.
 - **Collapse subtrees:** right-click a feature or group and choose **Collapse Subtree** to hide everything below it. A badge such as `+12` shows how many features are hidden. Choose **Expand Subtree** to show them again. The collapsed state is only kept for the current session and is not saved to the file.
 
-### Saving
-Edits are only written when you click **Save** or **Exit** in the upper left panel (or press `Ctrl+Alt+S` / `Ctrl+Alt+E`).
-
-- **With `--output`:** the edited model is saved to that file.
-- **Without `--output`:** when you save, a popup asks for a file path.
-  - If you enter a path, the model is saved there. The path is remembered, so later saves and Exit use it without asking again.
-  - If you leave it empty or press Cancel, the model is printed to the command line instead.
-
 ### Keyboard shortcuts
 
 | Shortcut | Action |
@@ -102,4 +94,3 @@ yarn build
 | Cardinality labels, Set Bounds, `*` for unbounded | `feature-node-view.tsx`, `node-context-menu.ts`, `css/diagram.css` |
 | Search bar with suggestions | `feature-search-bar.ts`, `feature-search-provider.ts`, `feature-search-utils.ts` |
 | Collapse/expand subtrees, `+N` badge | `toggle-collapse-action.ts`, `node-context-menu.ts`, `feature-node-view.tsx` |
-| Save and Exit, save popup | `client-save-action.ts`, `client-exit-action.ts`, `session-management-panel.ts`, `di.config.ts` |
