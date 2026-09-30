@@ -25,7 +25,9 @@ import de.featjar.base.data.Problem;
 import de.featjar.base.data.Problem.Severity;
 import de.featjar.base.data.Result;
 import de.featjar.base.io.format.ParseProblem;
+import de.featjar.base.tree.Trees;
 import de.featjar.formula.assignment.Assignment;
+import de.featjar.formula.io.textual.ExpressionSerializer;
 import de.featjar.formula.io.textual.JavaSymbols;
 import de.featjar.formula.io.textual.Symbols;
 import de.featjar.formula.structure.IExpression;
@@ -507,6 +509,85 @@ public class Preprocessor {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Renames all occurrences of a feature in {@code #if} and {@code #elif}
+     * annotation conditions.
+     *
+     * @param lines the line stream
+     * @param oldFeatureName the current feature name
+     * @param newFeatureName the new feature name
+     * @return a stream containing the lines with renamed feature annotations
+     */
+    public Stream<String> renameFeatureAnnotations(Stream<String> lines, String oldFeatureName, String newFeatureName) {
+
+        Objects.requireNonNull(lines);
+        Objects.requireNonNull(oldFeatureName);
+        Objects.requireNonNull(newFeatureName);
+
+        if (oldFeatureName.isEmpty()) {
+            throw new IllegalArgumentException("old feature name must not be empty");
+        }
+
+        if (newFeatureName.isEmpty()) {
+            throw new IllegalArgumentException("new feature name must not be empty");
+        }
+
+        if (oldFeatureName.equals(newFeatureName)) {
+            return lines;
+        }
+
+        return lines.map(line -> renameFeatureInAnnotation(line, oldFeatureName, newFeatureName));
+    }
+
+    private String renameFeatureInAnnotation(String line, String oldFeatureName, String newFeatureName) {
+
+        Matcher matcher = annotationPattern.matcher(line);
+
+        if (!matcher.matches()) {
+            return line;
+        }
+
+        String conditionGroup;
+
+        if (matcher.group(IF_GROUP) != null) {
+            conditionGroup = IF_CONDITION_GROUP;
+        } else if (matcher.group(ELIF_GROUP) != null) {
+            conditionGroup = ELIF_CONDITION_GROUP;
+        } else {
+            return line;
+        }
+
+        String condition = matcher.group(conditionGroup);
+
+        Result<IExpression> parse = annotationParser.parse(condition);
+
+        if (!parse.isPresent()) {
+            return line;
+        }
+
+        IExpression expression = parse.get();
+
+        List<Variable> variablesToRename = expression
+                .getVariableStream()
+                .filter(variable -> variable.getName().equals(oldFeatureName))
+                .toList();
+
+        if (variablesToRename.isEmpty()) {
+            return line;
+        }
+
+        variablesToRename.forEach(variable -> variable.setName(newFeatureName));
+
+        ExpressionSerializer serializer = new ExpressionSerializer();
+        serializer.setSymbols(getSymbols());
+
+        String renamedCondition = Trees.traverse(expression, serializer).orElseThrow();
+
+        int conditionStart = matcher.start(conditionGroup);
+        int conditionEnd = matcher.end(conditionGroup);
+
+        return line.substring(0, conditionStart) + renamedCondition + line.substring(conditionEnd);
+    }
     /**
      * {@return a problem for each annotation with a syntactically invalid condition, including its line number}
      *
