@@ -174,8 +174,11 @@ function openGui(uri: vscode.Uri) {
 			Click "Add Folder"
 			Paste the copied path
 			Confirm the folder
-			Click the yellow FeatJAR button at the bottom`, { modal: true },
-			'Open Workspace Trust'
+			Click the yellow FeatJAR button at the bottom
+
+			If the folder is already trusted, click "Open Workspace Trust" and then directly click the yellow FeatJAR button at the bottom.`,
+				{ modal: true },
+				'Open Workspace Trust'
 			);
 
 			if (choice !== 'Open Workspace Trust') {
