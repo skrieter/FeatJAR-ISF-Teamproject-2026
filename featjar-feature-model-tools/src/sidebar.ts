@@ -137,6 +137,7 @@ class UvlFileProvider implements vscode.TreeDataProvider<ModelTreeNode> {
 		});
 	}
 
+	// AI-assisted: parses FeatJAR's text output into statistic values keyed by name.
 	private parseStatistics(output: string): Record<string, string> {
 		const values: Record<string, string> = {};
 		for (const statistic of syntacticalStatistics) {
