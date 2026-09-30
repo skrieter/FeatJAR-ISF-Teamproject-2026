@@ -13,6 +13,7 @@ import { injectable, inject } from 'inversify';
 import { ExitAction } from './client-exit-action';
 import { SaveAction } from './client-save-action';
 import { SetFeatureColorAction, ToggleShowAttributesAction } from './set-type-actions';
+import { CollapseMode, SetCollapseStateAction } from './set-collapse-state-action';
 /**
  * Toolbar that contains the save, exit, and set-color actions.
  *
@@ -58,6 +59,7 @@ export class SessionManagementPanel extends AbstractUIExtension implements IDiag
                 this.actionDispatcher.dispatch(ExitAction.create());
             })
         );
+        containerElement.appendChild(this.createCollapseMenu());
 
         this.colorButton = this.createButton('btn-set-color', 'Set Color...', () => this.promptAndDispatch());
         this.setColorButtonEnabled(false);
@@ -94,6 +96,50 @@ export class SessionManagementPanel extends AbstractUIExtension implements IDiag
         button.textContent = label;
         button.onclick = onClick;
         return button;
+    }
+    /**
+     * Builds the "Collapse / Expand" dropdown.
+     */
+    protected createCollapseMenu(): HTMLElement {
+        const select = document.createElement('select');
+        select.id = 'sel-collapse';
+
+        const entries: [string, string][] = [
+            ['', 'Collapse / Expand...'],
+            ['collapseAll', 'Collapse all'],
+            ['collapseAllButRoot', 'Collapse all but root'],
+            ['collapseFromLevel', 'Collapse from level...'],
+            ['expandAll', 'Expand all'],
+            ['expandUpToLevel', 'Expand up to level...']
+        ];
+        for (const [value, label] of entries) {
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = label;
+            select.appendChild(option);
+        }
+
+        select.onchange = () => {
+            const mode = select.value as CollapseMode;
+            select.value = '';
+            if (!mode) {
+                return;
+            }
+            if (mode === 'collapseFromLevel' || mode === 'expandUpToLevel') {
+                const input = window.prompt('Level (root = 0):', '1');
+                if (input === null) {
+                    return;
+                }
+                const level = Number.parseInt(input, 10);
+                if (Number.isNaN(level) || level < 0) {
+                    return;
+                }
+                this.actionDispatcher.dispatch(SetCollapseStateAction.create(mode, level));
+                return;
+            }
+            this.actionDispatcher.dispatch(SetCollapseStateAction.create(mode));
+        };
+        return select;
     }
 
     /*
