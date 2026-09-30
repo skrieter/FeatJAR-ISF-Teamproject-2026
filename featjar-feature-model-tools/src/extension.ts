@@ -158,7 +158,12 @@ function openGui(uri: vscode.Uri) {
 		if (output.includes('URL:')) {
 			const parts = output.split('URL:');
 			const url = parts[1].trim();
-
+			const config = vscode.workspace.getConfiguration('featjar');
+			const showTrustWarning = config.get<boolean>('showGuiTrustWarning', true);
+			if (!showTrustWarning) {
+    			await vscode.commands.executeCommand('simpleBrowser.show', url);
+    			return;
+			}
 			const htmlUri = vscode.Uri.parse(url);
 			const htmlPath = htmlUri.fsPath;
 			const htmlFolder = path.dirname(htmlPath);
@@ -224,10 +229,27 @@ function registerGuiTrustConfirmation(context: vscode.ExtensionContext) {
 			}
 
 			if (confirmation === 'Yes, Open GUI') {
+				
+				const config = vscode.workspace.getConfiguration('featjar');
+
+
+				await config.update(
+					'showGuiTrustWarning',
+					false,
+					vscode.ConfigurationTarget.Global
+				);
+
+
 				trustStatusBarItem?.hide();
 
-				await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
-				await vscode.commands.executeCommand('simpleBrowser.show', pendingGuiUrl);
+				await vscode.commands.executeCommand(
+					'workbench.action.closeActiveEditor'
+				);
+
+				await vscode.commands.executeCommand(
+					'simpleBrowser.show',
+					pendingGuiUrl
+				);
 
 				pendingGuiUrl = undefined;
 			}
