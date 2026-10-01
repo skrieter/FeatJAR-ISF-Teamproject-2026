@@ -149,18 +149,20 @@ public class MoveNodeHandler extends EMFOperationHandler<MoveNodeOperation> {
      *
      * @return the destination, or null if this kind of node can not be moved there
      */
-    private Destination findDestination(final Identifiable moved, final Identifiable target, final String position) {
+        private Destination findDestination(
+            final Identifiable moved, final Identifiable target, final MoveNodeOperation.Position position) {
         boolean inside = false;
         boolean before = false;
         boolean after = false;
 
+        if (position == null) {
+            return null;
+        }
+
         switch (position) {
-            case MoveNodeOperation.INSIDE -> inside = true;
-            case MoveNodeOperation.BEFORE -> before = true;
-            case MoveNodeOperation.AFTER -> after = true;
-            default -> {
-                return null;
-            }
+            case inside -> inside = true;
+            case before -> before = true;
+            case after -> after = true;
         }
 
         if (moved instanceof Feature) {
