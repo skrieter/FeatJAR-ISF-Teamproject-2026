@@ -9,7 +9,9 @@ import {
 	exportUVL,
 	exportXML,
 	exportDIMACS,
-	exportTeX
+	exportTeX,
+	registerGuiTrustConfirmation,
+
 } from './extension-functions';
 import { registerSidebar } from './sidebar';
 
@@ -21,6 +23,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 	await featJarDownload();
 	await startExtensionShell(featJarPath());
 	registerSidebar(context);
+	registerGuiTrustConfirmation(context);
 	const output = vscode.window.createOutputChannel('FeatJAR');
 	context.subscriptions.push(output);
 	const checkSatisfiability = vscode.commands.registerCommand(
