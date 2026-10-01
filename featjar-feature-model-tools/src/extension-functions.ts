@@ -1,0 +1,388 @@
+import * as vscode from 'vscode';
+import { ChildProcessWithoutNullStreams } from 'node:child_process';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { spawn } from 'child_process';
+import * as fs from 'node:fs';
+import { join } from 'node:path';
+import { homedir } from 'node:os';
+
+const READY_REQUEST = 'READY';
+const ERROR_PREFIX = 'ERROR:';
+
+const FEATJAR_DOWNLOAD_URL = 'https://github.com/skrieter/FeatJAR-ISF-Teamproject-2026/releases/download/feat.jar/feat.jar';
+
+let extensionShell: ChildProcessWithoutNullStreams | undefined;
+let shellOutputBuffer = '';
+let resolveShellReady: (() => void) | undefined;
+let pendingGuiUrl: string | undefined;
+let trustStatusBarItem: vscode.StatusBarItem | undefined;
+const pendingCommands: Array<(output: string) => void> = [];
+
+export function featJarPath(): string {
+	return path.join(os.homedir(), '.featjar-bin', 'feat.jar');
+}
+
+export async function checkSatisfiable(uri: vscode.Uri): Promise<boolean | undefined> {
+    const result = await executeInExtensionShell(['solutions-sat4j', '--input', uri.fsPath, '--limit', '1', '--format', 'SimpleCSV',]);
+    if (isErrorResult(result)) {
+        return;
+    }
+
+	return result.split('\n').some(line => line.startsWith('0;'));
+}
+export async function printModelStats(uri: vscode.Uri): Promise<string | undefined> {
+    const result = await executeInExtensionShell(['print-model-stats', '--input', uri.fsPath,]);
+
+    if (isErrorResult(result)) {
+        return;
+    }
+
+    return result;
+}
+export async function countConfigurations(uri: vscode.Uri): Promise<string | undefined> {
+    const result = await executeInExtensionShell(['count-sat4j', '--input', uri.fsPath,]);
+
+    if (isErrorResult(result)) {
+        return;
+    }
+
+    return result;
+}
+
+export async function analyzeCoreDead(uri: vscode.Uri): Promise<{ core: number; dead: number } | undefined> {
+    // The implementation here is with AI assistance
+    const result = await executeInExtensionShell(['core-sat4j', '--input', uri.fsPath, '--output-format', 'LiteralList',]);
+
+    if (isErrorResult(result)) {
+        return;
+    }
+
+    // LiteralList separates signed feature names with commas
+    // and assignments with newlines.
+    const literals = result
+		.split(/\r?\n/).map(line => line.trim())
+		.filter(line => line && !/^\[.*?\] \[(INFO|DEBUG|WARN|ERROR)\]/.test(line))
+        .flatMap(line => line.split(','))
+        .map(value => value.trim());
+
+    if (literals.some(value => !/^[+-].+/.test(value))) {
+        throw new Error(
+            'FeatJAR returned no valid core/dead literal list. '
+        );
+    }
+
+    const core = literals.filter(value => value.startsWith('+')).length;
+
+    const dead = literals.filter(value => value.startsWith('-')).length;
+
+    return { core, dead };
+}
+
+export async function featJarDownload(): Promise<void> {
+
+	const featJarDirectory = path.join(os.homedir(), '.featjar-bin');
+	const featJarPath = path.join(featJarDirectory, 'feat.jar');
+	if (!fs.existsSync(featJarPath)) {
+		const choice = await vscode.window.showInformationMessage('FeatJAR is not installed. Would you like to download it?', 'Download', 'Cancel');
+		if (choice === 'Download') {
+			try {
+				await fs.promises.mkdir(featJarDirectory, {recursive: true});
+
+				const response = await fetch(FEATJAR_DOWNLOAD_URL);
+
+				if (!response.ok) {
+					throw new Error(`Download failed with status ${response.status}`);
+				}
+
+				const data = Buffer.from(await response.arrayBuffer());
+				const temporaryPath = `${featJarPath}.download`;
+
+				await fs.promises.writeFile(temporaryPath, data);
+				await fs.promises.rename(temporaryPath, featJarPath);
+
+				vscode.window.showInformationMessage('FeatJAR was installed successfully.');
+			} catch (error) {
+				vscode.window.showErrorMessage(
+					`Could not download FeatJAR: ${error}`
+				);
+			}
+		}
+	}
+}
+
+export function startExtensionShell(jarPath: string): Promise<void> {
+	extensionShell = spawn(
+		'java',
+		['-cp', jarPath, 'de.featjar.base.shell.ExtensionShell'],
+		{ windowsHide: true, stdio: 'pipe' },
+	);
+	extensionShell.stdout.setEncoding('utf8');
+	extensionShell.stdout.on('data', (data: string) => readShellOutput(data));
+
+	return new Promise(resolve => {
+		resolveShellReady = resolve;
+		
+		extensionShell?.on('error', () => {
+			resolveShellReady = undefined;
+			void vscode.window.showErrorMessage('Could not start FeatJAR. Check that Java is installed and FeatJAR is available.');
+			resolve();
+		});
+		extensionShell?.on('close', () => {
+			if (resolveShellReady) {
+				resolveShellReady = undefined;
+				void vscode.window.showErrorMessage('FeatJAR exited before it was ready.');
+				resolve();
+			}
+		});
+	});
+}
+
+function readShellOutput(data: string): void {
+	
+	shellOutputBuffer += data;
+
+	let lineBreakIndex: number;
+	while ((lineBreakIndex = shellOutputBuffer.indexOf('\n')) >= 0) {
+		const line = shellOutputBuffer.slice(0, lineBreakIndex).replace(/\r$/, '');
+		shellOutputBuffer = shellOutputBuffer.slice(lineBreakIndex + 1);
+
+		if (line === READY_REQUEST) {
+			if (resolveShellReady !== undefined) {
+				const resolve = resolveShellReady;
+				resolveShellReady = undefined;
+				resolve();
+			}
+			continue;
+		}
+
+		if (line.startsWith('RESULT\t')) {
+			const fields = line.split('\t', 2);
+			const resolveCommand = pendingCommands.shift();
+			resolveCommand?.(Buffer.from(fields[1], 'base64url').toString('utf8'));
+			
+		}
+	}
+}
+
+function executeInExtensionShell(args: string[]): Promise<string> {
+	return new Promise(resolve => {
+		pendingCommands.push(resolve);
+		extensionShell?.stdin.write(`RUN\t${args.join('\t')}\n`);
+	});
+}
+
+function isErrorResult(output: string): boolean {
+	if (!output.startsWith(ERROR_PREFIX)) {
+		return false;
+	}
+
+	void vscode.window.showErrorMessage(output);
+	return true;
+}
+
+export function openGui(uri: vscode.Uri) {
+	const featjarPath = path.join(os.homedir(), '.featjar-bin', 'feat.jar');
+	const process = spawn('java', ['-jar', featjarPath, 'gui', '--input', uri.fsPath]);
+
+	process.stdout.on('data', async (data) => {
+		const output = data.toString();
+
+		if (output.includes('URL:')) {
+			const parts = output.split('URL:');
+			const url = parts[1].trim();
+			const config = vscode.workspace.getConfiguration('featjar');
+			const showTrustWarning = config.get<boolean>('showGuiTrustWarning', true);
+			if (!showTrustWarning) {
+				await vscode.commands.executeCommand('simpleBrowser.show', url);
+				return;
+			}
+			const htmlUri = vscode.Uri.parse(url);
+			const htmlPath = htmlUri.fsPath;
+			const htmlFolder = path.dirname(htmlPath);
+
+			const choice = await vscode.window.showWarningMessage(
+				`FeatJAR needs the GUI folder to be trusted.
+
+			The folder path has already been copied to your clipboard:
+
+			${htmlFolder}
+
+			In Workspace Trust:
+			Click "Add Folder"
+			Paste the copied path
+			Confirm the folder
+			Click the yellow FeatJAR button at the bottom
+
+			If the folder is already trusted, click "Open Workspace Trust" and then directly click the yellow FeatJAR button at the bottom.`,
+				{ modal: true },
+				'Open Workspace Trust'
+			);
+
+			if (choice !== 'Open Workspace Trust') {
+				return;
+			}
+
+			await vscode.env.clipboard.writeText(htmlFolder);
+
+			pendingGuiUrl = url;
+
+			await vscode.commands.executeCommand('workbench.trust.manage');
+
+			trustStatusBarItem?.show();
+		}
+	});
+}
+
+export function exportUVL(uri: vscode.Uri) {
+	const fileName = path.basename(
+    		uri.fsPath,
+    		path.extname(uri.fsPath)
+			);
+
+		const outputPath = path.join(
+    	path.dirname(uri.fsPath),
+    	'export',
+    	`${fileName}.uvl`
+);
+			const result = executeInExtensionShell([
+            'convert-model',
+            '--input',
+            uri.fsPath,
+			'--output',
+			outputPath,
+            '--output-format',
+            'UVL'
+        ]);
+}
+
+export function exportXML(uri: vscode.Uri) {
+	const fileName = path.basename(
+    		uri.fsPath,
+    		path.extname(uri.fsPath)
+			);
+
+		const outputPath = path.join(
+    	path.dirname(uri.fsPath),
+    	'export',
+    	`${fileName}.xml`
+);
+			const result = executeInExtensionShell([
+            'convert-model',
+            '--input',
+            uri.fsPath,
+			'--output',
+			outputPath,
+            '--output-format',
+            'FeatureIDE'
+        ]);
+}
+
+export function exportDIMACS(uri: vscode.Uri) {
+	const fileName = path.basename(
+    		uri.fsPath,
+    		path.extname(uri.fsPath)
+			);
+
+		const outputPath = path.join(
+    	path.dirname(uri.fsPath),
+    	'export',
+    	`${fileName}.dimacs`
+);
+			const result = executeInExtensionShell([
+            'convert-model',
+            '--input',
+            uri.fsPath,
+			'--output',
+			outputPath,
+            '--output-format',
+            'DIMACS'
+        ]);
+}
+export function exportTeX(uri: vscode.Uri) {
+	const fileName = path.basename(
+
+    	uri.fsPath,
+    	path.extname(uri.fsPath)
+		);	
+
+		const outputPath = path.join(
+    	path.dirname(uri.fsPath),
+    	'export',
+    	`${fileName}.tex`
+);
+			const result = executeInExtensionShell([
+            'convert-model',
+            '--input',
+            uri.fsPath,
+			'--output',
+			outputPath,
+            '--output-format',
+            'LaTeX'
+        ]);
+}
+/**
+ * Registers the command to confirm that the user has added the FeatJAR GUI folder to Trusted Folders & Workspaces.
+ * @param context The extension context.
+ */
+export function registerGuiTrustConfirmation(context: vscode.ExtensionContext) {
+	trustStatusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 10000);
+
+	trustStatusBarItem.text = '$(warning) FEATJAR: AFTER ADDING THE FOLDER, CLICK HERE';
+	trustStatusBarItem.tooltip = 'Add the copied FeatJAR GUI folder to Trusted Folders & Workspaces. Then click here to continue and open the GUI.';
+	trustStatusBarItem.command = 'featjar-extension.confirmGuiTrust';
+	trustStatusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
+
+	const confirmGuiTrust = vscode.commands.registerCommand(
+		'featjar-extension.confirmGuiTrust',
+		async () => {
+			if (!pendingGuiUrl) {
+				return;
+			}
+
+			const confirmation = await vscode.window.showWarningMessage(
+				'Did you add the copied FeatJAR GUI folder to Trusted Folders & Workspaces?',
+				{ modal: true },
+				'Yes, Open GUI',
+				'Back to Workspace Trust'
+			);
+
+			if (confirmation === 'Back to Workspace Trust') {
+				await vscode.commands.executeCommand('workbench.trust.manage');
+				return;
+			}
+
+			if (confirmation === 'Yes, Open GUI') {
+				
+				const config = vscode.workspace.getConfiguration('featjar');
+
+
+				await config.update(
+					'showGuiTrustWarning',
+					false,
+					vscode.ConfigurationTarget.Global
+				);
+
+
+				trustStatusBarItem?.hide();
+
+				await vscode.commands.executeCommand(
+					'workbench.action.closeActiveEditor'
+				);
+
+				await vscode.commands.executeCommand(
+					'simpleBrowser.show',
+					pendingGuiUrl
+				);
+
+				pendingGuiUrl = undefined;
+			}
+		}
+	);
+
+	context.subscriptions.push(trustStatusBarItem, confirmGuiTrust);
+}
+
+export function shutdownExtensionShell(): void {
+	extensionShell?.stdin.write('SHUTDOWN\n');
+}
