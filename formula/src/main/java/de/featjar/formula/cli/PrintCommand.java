@@ -77,7 +77,7 @@ public class PrintCommand extends ACommand {
      */
     public static final Option<Symbols> SYMBOLS_OPTION = Options.newOption("symbols", arg -> {
                 try {
-                    String className = arg.contains(".") ? arg : "de.featjar.formula.io.textual." + arg;
+                    String className = Symbols.class.getPackage().getName() + "." + arg;
 
                     return Result.of((Symbols)
                             Class.forName(className).getField("INSTANCE").get(null));
