@@ -22,18 +22,6 @@
         "title": "FeatJAR: Open GUI"
       },
       {
-        "command": "featjar-extension.countConfigurations",
-       "title": "Count Configurations"
-      },
-      {
-        "command": "featjar-extension.coreDeadFeatures",
-       "title": "Count Core/Dead Features"
-      },
-      {
-        "command": "featjar-extension.modelTest",
-       "title": "model stats "
-      },
-      {
         "command": "featjar-extension.refreshUvlFiles",
         "title": "Refresh UVL Files",
         "icon": "$(refresh)"
@@ -98,26 +86,6 @@
         "when": "resourceExtname != .tex"
         }
       ],
-      "view/item/context": [
-    {
-        "command": "featjar-extension.checkSatisfiability",
-        "when": "view == uvlFiles"
-    },
-    {
-        "command": "featjar-extension.countConfigurations",
-        "when": "view == uvlFiles"
-    },{
-        "command": "featjar-extension.coreDeadFeatures",
-        "when": "view == uvlFiles"
-    },{
-        "command": "featjar-extension.modelTest",
-        "when": "view == uvlFiles"
-    },{
-        "submenu": "featjar.exportMenu",
-        "when": "resourceExtname == .uvl || resourceExtname == .xml || resourceExtname == .dimacs",
-        "group": "featjar"
-      }
-    ],
     "view/title": [
     {
         "command": "featjar-extension.refreshUvlFiles",

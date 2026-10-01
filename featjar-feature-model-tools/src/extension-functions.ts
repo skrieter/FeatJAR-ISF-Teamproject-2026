@@ -64,7 +64,7 @@ export async function analyzeCoreDead(uri: vscode.Uri): Promise<{ core: number; 
         .flatMap(line => line.split(','))
         .map(value => value.trim());
 
-    if (literals.length === 0 || literals.some(value => !/^[+-].+/.test(value))) {
+    if (literals.some(value => !/^[+-].+/.test(value))) {
         throw new Error(
             'FeatJAR returned no valid core/dead literal list. '
         );

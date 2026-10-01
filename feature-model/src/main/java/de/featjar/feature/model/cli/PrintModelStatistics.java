@@ -97,6 +97,8 @@ public class PrintModelStatistics extends ACommand {
             DataTree<?> treeData = DataTree.of("FeatureTree");
             data.addChild(treeData);
             treeData.addChild(
+                DataTree.ofValue("NumberOfFeatures", model.getFeatures().size()));
+            treeData.addChild(
                     Computations.of(model).map(ComputeFeatureTreeMaxDepth::new).compute());
             treeData.addChild(Computations.of(model)
                     .map(ComputeFeatureTreeNumberOfBranches::new)
@@ -114,6 +116,8 @@ public class PrintModelStatistics extends ACommand {
         if (scope == AnalysesScope.ALL || scope == AnalysesScope.CONSTRAINT_RELATED) {
             DataTree<?> constraintData = DataTree.of("CrossTreeConstraints");
             data.addChild(constraintData);
+            constraintData.addChild(
+                DataTree.ofValue("NumberOfConstraints", model.getConstraints().size()));
             constraintData.addChild(Computations.of(model)
                     .map(ComputeConstraintNumberOfAtoms::new)
                     .compute());
