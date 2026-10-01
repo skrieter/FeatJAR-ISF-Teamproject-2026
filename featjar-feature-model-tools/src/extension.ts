@@ -13,6 +13,11 @@ import {
 } from './extension-functions';
 import { registerSidebar } from './sidebar';
 
+
+
+const FEATJAR_DOWNLOAD_URL = 'https://github.com/skrieter/FeatJAR-ISF-Teamproject-2026/releases/download/feat.jar/feat.jar';
+
+
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
 	await featJarDownload();
 	await startExtensionShell(featJarPath());
