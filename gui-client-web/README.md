@@ -59,6 +59,16 @@ Tick **Show attributes** in the upper left panel to display feature attributes i
 ```bash
 ./gradlew build
 ```
+Or:
+```windows Powershell 
+cd gui-client-web
+npx tsc -b
+npx webpack
+cd ..
+.\gradlew build
+cd all
+.\gradlew build
+Remove-Item -Recurse -Force "$env:USERPROFILE\.featjar-bin\gui" -ErrorAction SilentlyContinue java -jar build\libs\feat.jar gui --input 
 
 ### Initial Build
 ```bash
