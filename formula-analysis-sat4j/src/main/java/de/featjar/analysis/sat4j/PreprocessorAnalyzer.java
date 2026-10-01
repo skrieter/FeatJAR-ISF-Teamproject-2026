@@ -25,6 +25,7 @@ import de.featjar.base.computation.Computations;
 import de.featjar.base.tree.Trees;
 import de.featjar.composition.Preprocessor;
 import de.featjar.formula.VariableMap;
+import de.featjar.formula.assignment.Assignment;
 import de.featjar.formula.assignment.BooleanAssignmentList;
 import de.featjar.formula.assignment.conversion.ComputeBooleanClauseList;
 import de.featjar.formula.computation.ComputeCNFFormula;
@@ -32,18 +33,70 @@ import de.featjar.formula.computation.ComputeNNFFormula;
 import de.featjar.formula.io.textual.ExpressionSerializer;
 import de.featjar.formula.io.textual.Symbols;
 import de.featjar.formula.structure.IFormula;
+import de.featjar.formula.structure.connective.And;
 import de.featjar.formula.structure.connective.Not;
 import de.featjar.formula.structure.predicate.False;
+import de.featjar.formula.structure.predicate.Literal;
 import de.featjar.formula.structure.predicate.True;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class PreprocessorAnalyzer extends Preprocessor {
 
+    public static enum Inclusion {
+        ALWAYS,
+        SOMETIMES,
+        NEVER
+    }
+
     public PreprocessorAnalyzer(String annotationPrefix, Symbols symbols) {
         super(annotationPrefix, symbols);
+    }
+
+    public PreprocessorAnalyzer(Style style) {
+        super(style);
+    }
+
+    /**
+     * {@return for each line, in order, whether it is always, sometimes, or never included
+     * in a valid completion of the given partial assignment}
+     * Annotation lines are never included. Classification uses SAT checks for the presence condition
+     * and its negation under the feature model and the assignment.
+     *
+     * @param lines the line stream
+     * @param featureModel the feature model
+     * @param assignment the partial Boolean assignment; null values are unassigned
+     */
+    public List<Inclusion> computeInclusions(Stream<String> lines, IFormula featureModel, Assignment assignment) {
+        List<IFormula> literals = new ArrayList<>();
+        assignment.getAll().forEach((name, value) -> {
+            if (value != null) {
+                if (!(value instanceof Boolean)) {
+                    throw new IllegalArgumentException("Expected a Boolean value for " + name);
+                }
+                literals.add(new Literal((Boolean) value, name));
+            }
+        });
+        BooleanAssignmentList assignedClauses = ComputeBooleanClauseList.toBooleanAssignmentList(new And(literals))
+                .orElseThrow();
+        BooleanAssignmentList modelClauses = toClauses(featureModel);
+        VariableMap variableMap = new VariableMap(modelClauses.getVariableMap(), assignedClauses.getVariableMap());
+        BooleanAssignmentList clauses = modelClauses.remap(variableMap);
+        clauses.addAll(assignedClauses.remap(variableMap));
+        return computePresenceConditions(lines).stream()
+                .map(condition -> {
+                    if (condition == True.INSTANCE) {
+                        return Inclusion.ALWAYS;
+                    }
+                    if (!isSatisfiable(clauses, condition)) {
+                        return Inclusion.NEVER;
+                    }
+                    return isSatisfiable(clauses, new Not(condition)) ? Inclusion.SOMETIMES : Inclusion.ALWAYS;
+                })
+                .collect(Collectors.toList());
     }
 
     /**
@@ -59,13 +112,7 @@ public class PreprocessorAnalyzer extends Preprocessor {
         ExpressionSerializer serializer = new ExpressionSerializer();
         serializer.setSymbols(getSymbols());
         List<String> dead = new ArrayList<>();
-
-        // Compute the CNF of the feature model once (ComputeNNFFormula deals with the reference)
-        BooleanAssignmentList modelClauses = Computations.of(featureModel)
-                .map(ComputeNNFFormula::new)
-                .map(ComputeCNFFormula::new)
-                .map(ComputeBooleanClauseList::new)
-                .compute();
+        BooleanAssignmentList modelClauses = toClauses(featureModel);
 
         // A code block is a maximal run of lines between annotations. Annotations are
         // identified with the shared pattern and the named annotation groups so that
@@ -94,11 +141,7 @@ public class PreprocessorAnalyzer extends Preprocessor {
     public List<String> findSuperfluousAnnotations(Stream<String> lines, IFormula featureModel) {
         List<String> lineList = lines.toList();
         List<IFormula> presence = computePresenceConditions(lineList.stream());
-        BooleanAssignmentList modelClauses = Computations.of(featureModel)
-                .map(ComputeNNFFormula::new)
-                .map(ComputeCNFFormula::new)
-                .map(ComputeBooleanClauseList::new)
-                .compute();
+        BooleanAssignmentList modelClauses = toClauses(featureModel);
         List<String> result = new ArrayList<>();
 
         for (int i = 0; i < lineList.size(); i++) {
@@ -138,11 +181,19 @@ public class PreprocessorAnalyzer extends Preprocessor {
                 || matcher.group(ENDIF_GROUP) != null;
     }
 
+    /** {@return the CNF clauses of the given feature model} ComputeNNFFormula deals with the reference. */
+    private static BooleanAssignmentList toClauses(IFormula featureModel) {
+        return Computations.of(featureModel)
+                .map(ComputeNNFFormula::new)
+                .map(ComputeCNFFormula::new)
+                .map(ComputeBooleanClauseList::new)
+                .compute();
+    }
+
     /**
      * {@return whether the given presence condition is satisfiable together with the model}
      *
-     * Uses {@link ComputeSatisfiableSAT4J} with the model's clause list as the base
-     * and the presence condition's clause list as an assumed clause list.
+     * Combines the model and presence condition clauses before initializing {@link ComputeSatisfiableSAT4J}.
      * Both clause lists use a shared {@link VariableMap} that also includes variables
      * appearing only in the presence condition.
      */
@@ -160,9 +211,9 @@ public class PreprocessorAnalyzer extends Preprocessor {
                         cnfPresence, variableMap)
                 .orElseThrow();
 
-        return Computations.of(modelClauses.remap(variableMap))
+        presenceClauses.addAll(modelClauses.remap(variableMap));
+        return Computations.of(presenceClauses)
                 .map(ComputeSatisfiableSAT4J::new)
-                .set(ComputeSatisfiableSAT4J.ASSUMED_CLAUSE_LIST, presenceClauses)
                 .compute();
     }
 }
