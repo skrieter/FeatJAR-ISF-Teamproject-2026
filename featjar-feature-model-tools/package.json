@@ -12,6 +12,16 @@
   "activationEvents": ["workspaceContains:**/*.uvl"],
   "main": "./out/extension.js",
   "contributes": {
+    "configuration": {
+    "title": "FeatJAR",
+    "properties": {
+      "featjar.showGuiTrustWarning": {
+        "type": "boolean",
+        "default": true,
+        "description": "Show the trust warning before opening the FeatJAR GUI."
+      }
+    }
+    },
     "commands": [
       {
         "command": "featjar-extension.checkSatisfiability",
