@@ -141,6 +141,15 @@ public class MoveNodeHandler extends EMFOperationHandler<MoveNodeOperation> {
                     FeatJARPackage.Literals.FEATURE__GROUP_NODE_LIST,
                     destination.owner()));
         }
+        if (oldOwner instanceof GroupNode oldGroup) {
+            List<?> oldSiblings = (List<?>) oldOwner.eGet(oldReference);
+            if (oldSiblings.size() == 1 && oldGroup.eContainer() instanceof Feature oldGroupParent) {
+                // The moved feature was the group's only child, so the now-empty group is
+                // removed too
+                command.append(RemoveCommand.create(
+                        domain, oldGroupParent, FeatJARPackage.Literals.FEATURE__GROUP_NODE_LIST, oldGroup));
+            }
+        }
         return Optional.of(command);
     }
 
@@ -149,20 +158,19 @@ public class MoveNodeHandler extends EMFOperationHandler<MoveNodeOperation> {
      *
      * @return the destination, or null if this kind of node can not be moved there
      */
-        private Destination findDestination(
-            final Identifiable moved, final Identifiable target, final MoveNodeOperation.Position position) {
+    private Destination findDestination(final Identifiable moved, final Identifiable target,
+            final MoveNodeOperation.Position position) {
         boolean inside = false;
         boolean before = false;
         boolean after = false;
-
-        if (position == null) {
-            return null;
-        }
 
         switch (position) {
             case inside -> inside = true;
             case before -> before = true;
             case after -> after = true;
+            case null -> {
+                return null;
+            }
         }
 
         if (moved instanceof Feature) {
