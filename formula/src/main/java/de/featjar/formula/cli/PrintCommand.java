@@ -29,7 +29,6 @@ import de.featjar.base.io.text.GenericTextFormat;
 import de.featjar.base.tree.Trees;
 import de.featjar.formula.io.FormulaFormats;
 import de.featjar.formula.io.textual.ExpressionSerializer;
-import de.featjar.formula.io.textual.ShortSymbols;
 import de.featjar.formula.io.textual.Symbols;
 import java.util.List;
 import java.util.Optional;
@@ -78,8 +77,10 @@ public class PrintCommand extends ACommand {
      */
     public static final Option<Symbols> SYMBOLS_OPTION = Options.newOption("symbols", arg -> {
                 try {
-                    return Result.of(
-                            (Symbols) Class.forName(arg).getField("INSTANCE").get(null));
+                    String className = Symbols.class.getPackage().getName() + "." + arg;
+
+                    return Result.of((Symbols)
+                            Class.forName(className).getField("INSTANCE").get(null));
                 } catch (IllegalAccessException | NoSuchFieldException | ClassNotFoundException e) {
                     return Result.empty(e);
                 }
@@ -93,7 +94,7 @@ public class PrintCommand extends ACommand {
                     "TextualSymbols",
                     "UVLSymbols"))
             .setDescription("Defines the symbols.")
-            .setDefaultArgument(ShortSymbols.class.getName());
+            .setDefaultArgument("ShortSymbols");
 
     /**
      * Defines the new line string.
