@@ -39,7 +39,7 @@ public class FeatureModelDiagramConfiguration extends BaseDiagramConfiguration {
         return List.of(
                 new ShapeTypeHint("constraint-box", false, false, false, false),
                 // all other elements (constraints, features, group nodes)
-                new ShapeTypeHint(DefaultTypes.NODE, false, true, false, false));
+                new ShapeTypeHint(DefaultTypes.NODE, true, true, false, false));
     }
 
     @Override
@@ -49,7 +49,8 @@ public class FeatureModelDiagramConfiguration extends BaseDiagramConfiguration {
                 new EdgeTypeHint(EdgeType.MANDATORY_EDGE.value(), false, false, false, false, null, null),
                 new EdgeTypeHint(EdgeType.OPTIONAL_EDGE.value(), false, false, false, false, null, null));
     }
-    /* Because the engine is used, ServerLayoutKind needs to be AUTOMATIC*/
+
+    /* Because the engine is used, ServerLayoutKind needs to be AUTOMATIC */
     @Override
     public ServerLayoutKind getLayoutKind() {
         return ServerLayoutKind.AUTOMATIC;

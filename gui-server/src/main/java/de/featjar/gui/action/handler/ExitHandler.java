@@ -20,21 +20,47 @@
  */
 package de.featjar.gui.action.handler;
 
+import com.google.inject.Inject;
 import de.featjar.gui.FeatureModelWebsocketLauncher;
 import de.featjar.gui.action.ExitAction;
+import de.featjar.gui.utils.ModelSaveUtils;
 import java.util.List;
 import org.eclipse.glsp.server.actions.AbstractActionHandler;
 import org.eclipse.glsp.server.actions.Action;
-
+import org.eclipse.glsp.server.features.core.model.SourceModelStorage;
+import org.eclipse.glsp.server.model.GModelState;
 /**
  * The handler initiates the shut down of the server.
- * It is triggered by the underlying action {@link }.
+ * It is triggered by the underlying action {@link ExitAction }.
+ * 
+ *old class:
+public class ExitHandler extends AbstractActionHandler<ExitAction> {
+
+    Override
+    protected List<Action> executeAction(final ExitAction action) {
+        FeatureModelWebsocketLauncher.out.println(FeatureModelWebsocketLauncher.SIGNAL_STOP);
+        return none();
+    }
+}*/
+/*  The current model is written to disk first, so the parent process writes
+ * the edited model (and not the one from the start) when it shuts down.
  */
 public class ExitHandler extends AbstractActionHandler<ExitAction> {
 
+    @Inject
+    protected SourceModelStorage sourceModelStorage;
+
+    @Inject
+    protected GModelState modelState;
+
     @Override
     protected List<Action> executeAction(final ExitAction action) {
-        FeatureModelWebsocketLauncher.out.println(FeatureModelWebsocketLauncher.SIGNAL_STOP);
+        try {
+            ModelSaveUtils.flushModelToDisk(sourceModelStorage, modelState);
+        } finally {
+            // shut down even if writing the model failed
+            FeatureModelWebsocketLauncher.out.println(FeatureModelWebsocketLauncher.SIGNAL_STOP);
+        }
         return none();
     }
 }

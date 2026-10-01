@@ -24,6 +24,7 @@ import de.featjar.gui.action.handler.ClientMessageHandler;
 import de.featjar.gui.action.handler.ExitHandler;
 import de.featjar.gui.action.handler.SaveHandler;
 import de.featjar.gui.action.handler.SelectionHandler;
+import de.featjar.gui.action.handler.SetCollapseStateHandler;
 import de.featjar.gui.action.handler.ToggleCollapseHandler;
 import de.featjar.gui.model.FeatureModelGModelFactory;
 import de.featjar.gui.model.FeatureModelLayoutEngine;
@@ -31,6 +32,7 @@ import de.featjar.gui.model.FeatureModelSourceModelStorage;
 import de.featjar.gui.operation.handler.CreateConstraintHandler;
 import de.featjar.gui.operation.handler.DeleteIdentifiableNodeHandler;
 import de.featjar.gui.operation.handler.LabelEditHandler;
+import de.featjar.gui.operation.handler.MoveNodeHandler;
 import de.featjar.gui.operation.handler.SetCardinalityFeatureBoundsHandler;
 import de.featjar.gui.operation.handler.SetCardinalityGroupNodeBoundsHandler;
 import de.featjar.gui.operation.handler.SetFeatureColorHandler;
@@ -107,6 +109,7 @@ public class FeatureModelDiagramModule extends EMFNotationDiagramModule {
         bindings.add(ExitHandler.class);
         bindings.add(SaveHandler.class);
         bindings.add(ToggleCollapseHandler.class);
+        bindings.add(SetCollapseStateHandler.class);
     }
 
     @Override
@@ -123,6 +126,7 @@ public class FeatureModelDiagramModule extends EMFNotationDiagramModule {
 
         binding.add(CreateConstraintHandler.class);
         binding.add(DeleteIdentifiableNodeHandler.class);
+        binding.add(MoveNodeHandler.class);
         binding.add(LabelEditHandler.class);
 
         binding.add(SetFeatureImplementationHandler.class);

@@ -23,6 +23,7 @@ import {
     LogLevel,
     STANDALONE_MODULE_CONFIG,
     TYPES,
+    ChangeBoundsTool,
     accessibilityModule,
     bindOrRebind,
     configureModelElement,
@@ -44,6 +45,7 @@ import { FeatureCardinalityEdgeView } from './feature-edge-view';
 import { getParameters } from './url-parameters';
 import { SessionManagementPanel } from './session-management-panel';
 import { FeatureSearchProvider } from './feature-search-provider';
+import { FeatureChangeBoundsTool, FeatureMoveRestrictor } from './feature-change-bounds-tool';
 import { FeatureSearchBar } from './feature-search-bar';
 import { ImmediateNodeCreationTool } from './immediate-node-creation-tool';
 
@@ -113,6 +115,9 @@ export default function createContainer(options: IDiagramOptions): Container {
     configureModelElement(ctx, 'label-attribute', GLabel, GLabelView);
 
     bindOrRebind(container, TYPES.ILogger).to(ConsoleLogger).inSingletonScope();
+    // Dragging a node changes the tree (order or parent) instead of a pixel position
+    bindOrRebind(container, ChangeBoundsTool).to(FeatureChangeBoundsTool).inSingletonScope();
+    bindOrRebind(container, TYPES.IMovementRestrictor).to(FeatureMoveRestrictor).inSingletonScope();
     bindOrRebind(container, TYPES.LogLevel).toConstantValue(LogLevel.warn);
     container.bind(TYPES.IMarqueeBehavior).toConstantValue({ entireEdge: true, entireElement: true });
     // Palette buttons (Add Feature, Add Node, Add Constraint, ...) create the element right away
