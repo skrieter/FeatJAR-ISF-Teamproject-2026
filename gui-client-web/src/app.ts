@@ -23,7 +23,9 @@ import {
     GLSPWebSocketProvider,
     MessageAction,
     StatusAction,
-    CreateNodeOperation
+    CreateNodeOperation,
+    EditorContextService
+
 } from '@eclipse-glsp/client';
 import { Container } from 'inversify';
 import { join, resolve } from 'path';
@@ -256,3 +258,12 @@ function isEditableTarget(target: EventTarget | null): boolean {
     const tagName = target.tagName;
     return tagName === 'INPUT' || tagName === 'TEXTAREA' || target.isContentEditable;
 }
+/**
+ * Warns before the page is reloaded or closed while there are unsaved changes.
+*/
+window.addEventListener('beforeunload', (event: BeforeUnloadEvent) => {
+    if (container?.get(EditorContextService).isDirty) {
+        event.preventDefault();
+    }
+});
+

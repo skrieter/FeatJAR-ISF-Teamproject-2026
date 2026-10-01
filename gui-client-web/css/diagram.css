@@ -83,6 +83,13 @@
     fill: black;
 }
 
+/* Feature cardinality (e.g. "2..5"), shown only for features that can be
+   chosen more than once */
+.feature-cardinality-text {
+    font-size: 10px;
+    fill: #555;
+}
+
 /* Constraints */
  .constraint-box rect {
     stroke: none;
@@ -120,6 +127,30 @@
     flex-direction: column;
     gap: 4px;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+/* Collapse and Expand sub-menus */
+
+.session-management-panel-submenu {
+    position: relative;
+}
+
+.session-management-panel-submenu-list {
+    display: none;
+    position: absolute;
+    top: -7px;
+    left: 100%;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px;
+    white-space: nowrap;
+    background: white;
+    border: 1px solid #888;
+    border-radius: 4px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.session-management-panel-submenu:hover > .session-management-panel-submenu-list {
+    display: flex;
 }
 
 .session-management-panel-button {
