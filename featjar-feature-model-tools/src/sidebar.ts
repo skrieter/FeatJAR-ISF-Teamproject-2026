@@ -30,6 +30,10 @@ const semanticAnalyses: { label: string; key: string }[] = [
 	{ label: 'Dead Features', key: 'DeadFeatures' },
 ];
 
+/** 
+ * Registers the sidebar view for UVL files in the VS Code extension.
+ * @param context The extension context.
+*/
 class UvlFileProvider implements vscode.TreeDataProvider<ModelTreeNode> {
 	private readonly onDidChangeTreeDataEmitter = new vscode.EventEmitter<ModelTreeNode | undefined>();
 	private readonly statistics = new Map<string, {
@@ -39,7 +43,11 @@ class UvlFileProvider implements vscode.TreeDataProvider<ModelTreeNode> {
 	private readonly loadedStatistics = new Set<string>();
 	private readonly runningAnalyses = new Set<string>();
 	readonly onDidChangeTreeData = this.onDidChangeTreeDataEmitter.event;
-
+/**
+ * Gets the tree item representation for a given model tree node.
+ * @param element The model tree node.
+ * @returns A TreeItem representing the node.
+ */
 	getTreeItem(element: ModelTreeNode): vscode.TreeItem {
 		if (element.kind === 'model') {
 			const item = new vscode.TreeItem(

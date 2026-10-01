@@ -13,18 +13,16 @@ import {
 } from './extension-functions';
 import { registerSidebar } from './sidebar';
 
-
-
-const FEATJAR_DOWNLOAD_URL = 'https://github.com/skrieter/FeatJAR-ISF-Teamproject-2026/releases/download/feat.jar/feat.jar';
-
-
+/**
+ * Activates the extension.
+ * @param context The extension context.
+ */
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
 	await featJarDownload();
 	await startExtensionShell(featJarPath());
 	registerSidebar(context);
 	const output = vscode.window.createOutputChannel('FeatJAR');
 	context.subscriptions.push(output);
-	
 	const checkSatisfiability = vscode.commands.registerCommand(
 		'featjar-extension.checkSatisfiability',
 		async (uri: vscode.Uri) => {
@@ -67,7 +65,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 		exportTeXCommand,
 	);
 }
-
+/**
+ * Deactivates the extension.
+ */
 export function deactivate(): void {
 	shutdownExtensionShell();
 }

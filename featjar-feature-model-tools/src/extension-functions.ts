@@ -4,12 +4,9 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { spawn } from 'child_process';
 import * as fs from 'node:fs';
-import { join } from 'node:path';
-import { homedir } from 'node:os';
 
 const READY_REQUEST = 'READY';
 const ERROR_PREFIX = 'ERROR:';
-
 const FEATJAR_DOWNLOAD_URL = 'https://github.com/skrieter/FeatJAR-ISF-Teamproject-2026/releases/download/feat.jar/feat.jar';
 
 let extensionShell: ChildProcessWithoutNullStreams | undefined;
@@ -17,66 +14,18 @@ let shellOutputBuffer = '';
 let resolveShellReady: (() => void) | undefined;
 const pendingCommands: Array<(output: string) => void> = [];
 
+/**
+ * Returns the path to the FeatJAR jar file in the user's home directory.
+ * @returns The path to the FeatJAR jar file.
+ */
 export function featJarPath(): string {
 	return path.join(os.homedir(), '.featjar-bin', 'feat.jar');
 }
 
-export async function checkSatisfiable(uri: vscode.Uri): Promise<boolean | undefined> {
-    const result = await executeInExtensionShell(['solutions-sat4j', '--input', uri.fsPath, '--limit', '1', '--format', 'SimpleCSV',]);
-    if (isErrorResult(result)) {
-        return;
-    }
-
-	return result.split('\n').some(line => line.startsWith('0;'));
-}
-export async function printModelStats(uri: vscode.Uri): Promise<string | undefined> {
-    const result = await executeInExtensionShell(['print-model-stats', '--input', uri.fsPath,]);
-
-    if (isErrorResult(result)) {
-        return;
-    }
-
-    return result;
-}
-export async function countConfigurations(uri: vscode.Uri): Promise<string | undefined> {
-    const result = await executeInExtensionShell(['count-sat4j', '--input', uri.fsPath,]);
-
-    if (isErrorResult(result)) {
-        return;
-    }
-
-    return result;
-}
-
-export async function analyzeCoreDead(uri: vscode.Uri): Promise<{ core: number; dead: number } | undefined> {
-    // The implementation here is with AI assistance
-    const result = await executeInExtensionShell(['core-sat4j', '--input', uri.fsPath, '--output-format', 'LiteralList',]);
-
-    if (isErrorResult(result)) {
-        return;
-    }
-
-    // LiteralList separates signed feature names with commas
-    // and assignments with newlines.
-    const literals = result
-		.split(/\r?\n/).map(line => line.trim())
-		.filter(line => line && !/^\[.*?\] \[(INFO|DEBUG|WARN|ERROR)\]/.test(line))
-        .flatMap(line => line.split(','))
-        .map(value => value.trim());
-
-    if (literals.some(value => !/^[+-].+/.test(value))) {
-        throw new Error(
-            'FeatJAR returned no valid core/dead literal list. '
-        );
-    }
-
-    const core = literals.filter(value => value.startsWith('+')).length;
-
-    const dead = literals.filter(value => value.startsWith('-')).length;
-
-    return { core, dead };
-}
-
+/**
+ * Downloads the FeatJAR jar file.
+ * @returns A promise that resolves when the download is complete.
+ */
 export async function featJarDownload(): Promise<void> {
 
 	const featJarDirectory = path.join(os.homedir(), '.featjar-bin');
@@ -109,6 +58,87 @@ export async function featJarDownload(): Promise<void> {
 	}
 }
 
+/**
+ * Checks if a feature model is satisfiable.
+ * @param uri The URI of the feature model.
+ * @returns A promise that resolves to a boolean indicating if the model is satisfiable, or undefined if an error occurred.
+ */
+export async function checkSatisfiable(uri: vscode.Uri): Promise<boolean | undefined> {
+    const result = await executeInExtensionShell(['solutions-sat4j', '--input', uri.fsPath, '--limit', '1', '--format', 'SimpleCSV',]);
+    if (isErrorResult(result)) {
+        return;
+    }
+
+	return result.split('\n').some(line => line.startsWith('0;'));
+}
+
+/**
+ * Prints the statistics of a feature model.
+ * @param uri The URI of the feature model.
+ * @returns A promise that resolves to a string containing the statistics, or undefined if an error occurred.
+ */
+export async function printModelStats(uri: vscode.Uri): Promise<string | undefined> {
+    const result = await executeInExtensionShell(['print-model-stats', '--input', uri.fsPath,]);
+
+    if (isErrorResult(result)) {
+        return;
+    }
+
+    return result;
+}
+
+/**
+ * Counts the number of configurations in a feature model.
+ * @param uri The URI of the feature model.
+ * @returns A promise that resolves to a string containing the count, or undefined if an error occurred.
+ */
+export async function countConfigurations(uri: vscode.Uri): Promise<string | undefined> {
+    const result = await executeInExtensionShell(['count-sat4j', '--input', uri.fsPath,]);
+
+    if (isErrorResult(result)) {
+        return;
+    }
+
+    return result;
+}
+/**
+ * Analyzes the core and dead features of a feature model.
+ * @param uri The URI of the feature model.
+ * @returns A promise that resolves to an object containing the counts of core and dead features, or undefined if an error occurred.
+ */
+export async function analyzeCoreDead(uri: vscode.Uri): Promise<{ core: number; dead: number } | undefined> {
+    // The implementation here is with AI assistance
+    const result = await executeInExtensionShell(['core-sat4j', '--input', uri.fsPath, '--output-format', 'LiteralList',]);
+
+    if (isErrorResult(result)) {
+        return;
+    }
+
+    // LiteralList separates signed feature names with commas
+    // and assignments with newlines.
+    const literals = result
+		.split(/\r?\n/).map(line => line.trim())
+		.filter(line => line && !/^\[.*?\] \[(INFO|DEBUG|WARN|ERROR)\]/.test(line))
+        .flatMap(line => line.split(','))
+        .map(value => value.trim());
+
+    if (literals.some(value => !/^[+-].+/.test(value))) {
+        throw new Error(
+            'FeatJAR returned no valid core/dead literal list. '
+        );
+    }
+
+    const core = literals.filter(value => value.startsWith('+')).length;
+    const dead = literals.filter(value => value.startsWith('-')).length;
+
+    return { core, dead };
+}
+
+/**
+ * Starts the FeatJAR extension shell.
+ * @param jarPath The path to the FeatJAR jar file.
+ * @returns A promise that resolves when the shell is ready.
+ */
 export function startExtensionShell(jarPath: string): Promise<void> {
 	extensionShell = spawn(
 		'java',
@@ -136,6 +166,10 @@ export function startExtensionShell(jarPath: string): Promise<void> {
 	});
 }
 
+/** 
+ * Reads the output from the FeatJAR extension shell and resolves pending commands.
+ * @param data The output data from the shell.
+*/
 function readShellOutput(data: string): void {
 	
 	shellOutputBuffer += data;
@@ -163,6 +197,11 @@ function readShellOutput(data: string): void {
 	}
 }
 
+/**
+ * Executes a command in the FeatJAR extension shell.
+ * @param args The arguments for the command.
+ * @returns A promise that resolves to the output of the command.
+ */
 function executeInExtensionShell(args: string[]): Promise<string> {
 	return new Promise(resolve => {
 		pendingCommands.push(resolve);
@@ -179,6 +218,10 @@ function isErrorResult(output: string): boolean {
 	return true;
 }
 
+/** 
+ * Opens the FeatJAR GUI for a given feature model file.
+ * @param uri The URI of the feature model file.
+*/
 export function openGui(uri: vscode.Uri) {
 	const featjarPath = path.join(os.homedir(),'.featjar-bin','feat.jar');
 	const process = spawn('java',['-jar', featjarPath, 'gui', '--input', uri.fsPath]);
@@ -194,6 +237,10 @@ export function openGui(uri: vscode.Uri) {
 	});
 }
 
+/**
+ * Exports a feature model to UVL format.
+ * @param uri The URI of the feature model file.
+ */
 export function exportUVL(uri: vscode.Uri) {
 	const fileName = path.basename(
     		uri.fsPath,
@@ -216,6 +263,10 @@ export function exportUVL(uri: vscode.Uri) {
         ]);
 }
 
+/**
+ * Exports a feature model to XML format.
+ * @param uri The URI of the feature model file.
+ */
 export function exportXML(uri: vscode.Uri) {
 	const fileName = path.basename(
     		uri.fsPath,
@@ -238,6 +289,10 @@ export function exportXML(uri: vscode.Uri) {
         ]);
 }
 
+/**
+ * Exports a feature model to DIMACS format.
+ * @param uri The URI of the feature model file.
+ */
 export function exportDIMACS(uri: vscode.Uri) {
 	const fileName = path.basename(
     		uri.fsPath,
@@ -259,6 +314,10 @@ export function exportDIMACS(uri: vscode.Uri) {
             'DIMACS'
         ]);
 }
+/**
+ * Exports a feature model to LaTeX format.
+ * @param uri The URI of the feature model file.
+ */
 export function exportTeX(uri: vscode.Uri) {
 	const fileName = path.basename(
 
@@ -282,6 +341,9 @@ export function exportTeX(uri: vscode.Uri) {
         ]);
 }
 
+/**
+ * Shuts down the FeatJAR extension shell.
+ */
 export function shutdownExtensionShell(): void {
 	extensionShell?.stdin.write('SHUTDOWN\n');
 }
