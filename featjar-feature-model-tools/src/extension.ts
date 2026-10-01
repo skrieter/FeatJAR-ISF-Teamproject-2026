@@ -15,6 +15,10 @@ import {
 } from './extension-functions';
 import { registerSidebar } from './sidebar';
 
+/**
+ * Activates the extension.
+ * @param context The extension context.
+ */
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
 	await featJarDownload();
 	await startExtensionShell(featJarPath());
@@ -22,7 +26,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 	registerGuiTrustConfirmation(context);
 	const output = vscode.window.createOutputChannel('FeatJAR');
 	context.subscriptions.push(output);
-	
 	const checkSatisfiability = vscode.commands.registerCommand(
 		'featjar-extension.checkSatisfiability',
 		async (uri: vscode.Uri) => {
@@ -65,7 +68,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 		exportTeXCommand,
 	);
 }
-
+/**
+ * Deactivates the extension.
+ */
 export function deactivate(): void {
 	shutdownExtensionShell();
 }
